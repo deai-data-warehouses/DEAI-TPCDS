@@ -5,9 +5,9 @@ Navigate to the DSGen tools directory and run:
 ./dsdgen -SCALE 1 -DIR <your_data_output_dir>
 """
 
-
 import os
 import re
+
 from dotenv import load_dotenv
 from pyspark.sql import SparkSession
 
@@ -44,35 +44,37 @@ for stmt in statements:
     if "create table" in stmt.lower():
         # Extract the table name
         first_line = stmt.splitlines()[0].lower()
-        table_name = first_line.split("table")[1].strip().split()[0]
-        
+        table_name = re.search(r"create table (\w+)", first_line).group(1)
+
         # Skip dbgen_version due to unsupported TIME data type
+        # It is not used in the queries, it is only metadata for the TPC-DS benchmark
         if table_name == "dbgen_version":
             print("Skipping dbgen_version (metadata not required for queries)...")
             continue
-            
+
         print(f"Processing table: {table_name}...")
-        
-        # --- Remove Primary Key constraints ---
+
+        # --- Remove Primary Key constraints (Spark SQL does not support them) ---
         clean_lines = []
         for line in stmt.splitlines():
             if "primary key" not in line.lower():
                 clean_lines.append(line)
-        
+
         clean_stmt = "\n".join(clean_lines)
         # Remove trailing commas before the closing parenthesis
         clean_stmt = re.sub(r',\s*\)', '\n)', clean_stmt)
         # --------------------------------------
-        
+
         # Register the empty table in Spark using the cleaned SQL
+        # This creates a table named `table_name` with the correct schema but no data
         spark.sql(clean_stmt)
-        
+
         # Extract the perfect schema object for this specific table
         table_schema = spark.table(table_name).schema
-        
+
         # Define the path for the corresponding .dat file
         dat_file_path = os.path.join(DATA_DIR, f"{table_name}.dat")
-        
+
         if not os.path.exists(dat_file_path):
             print(f"  -> WARNING: File {dat_file_path} not found. Skipping table.")
             continue
@@ -83,7 +85,7 @@ for stmt in statements:
             sep='|',
             schema=table_schema
         )
-        
+
         # Save data in optimized Parquet format
         output_path = os.path.join(PARQUET_DIR, table_name)
         df.write.mode("overwrite").parquet(output_path)
