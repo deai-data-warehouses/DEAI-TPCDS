@@ -1,0 +1,11 @@
+[project]
+name = "deai-tpcds"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "dotenv>=0.9.9",
+    "ipykernel>=7.3.0",
+    "pyspark>=4.2.0",
+]
