@@ -1,3 +1,10 @@
 __pycache__
-.env
 .venv
+.env
+data_1GB/
+parquet_1GB/
+queries_1GB/
+DSGen-software-code-4.0.0/
+__pycache__/
+.ipynb_checkpoints/
+spark-warehouse/
