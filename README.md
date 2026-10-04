@@ -28,7 +28,7 @@ Options: `uv`, `venv`, etc.
 Docker runs the pipeline in Linux with Python, Java, and PySpark installed. First
 prepare the inputs described below and in the prerequisites:
 
-- Make sure the generated raw `.dat` files are in the  `data` folder inside.
+- Make sure the generated raw `.dat` files are in the  `data` folder inside `tools`. If you wish for the data, Parquet, and query files to be elsewhere, adjust both the 'volume' part of docker-compose.yml and the .env file to make them talk to eachother
 - Keep the TPC-DS tools directory, including `tpcds.sql`, at
   `DSGen-software-code-4.0.0/tools/`.
 - Generate `queries_1GB/query_0.sql` with `dsqgen` before running the benchmark.
@@ -39,6 +39,7 @@ Build the image and convert the raw data files to Parquet:
 docker compose build
 docker compose run --rm pipeline
 ```
+Or just docker compose run --build --rm pipeline
 
 Run the benchmark after the Parquet files and query file are ready:
 
@@ -46,7 +47,4 @@ Run the benchmark after the Parquet files and query file are ready:
 docker compose run --rm pipeline python pipeline/benchmark.py
 ```
 
-The Compose service bind-mounts `data_1GB/`, `parquet_1GB/`, and `queries_1GB/`
-from the project directory. Generated Parquet files and query files therefore
-remain on the host after the container exits. The TPC-DS tools directory is
-mounted read-only.
+The Compose service bind-mounts `data` and `parquet_1GB/` from the project directory. Generated Parquet files and query files therefore remain on the host after the container exits.
