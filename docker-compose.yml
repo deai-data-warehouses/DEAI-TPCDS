@@ -1,0 +1,11 @@
+services:
+  pipeline:
+    build: .
+    working_dir: /app
+    environment:
+      TPCDS_TOOLS_DIR: /opt/tpcds/tools
+      DATA_DIR: /opt/tpcds/tools/data
+    volumes:
+      - ./DSGen-software-code-4.0.0/tools:/opt/tpcds/tools
+      - ./DSGen-software-code-4.0.0/tools/data:/opt/tpcds/tools/data
+    command: ["python", "pipeline/main.py"]
