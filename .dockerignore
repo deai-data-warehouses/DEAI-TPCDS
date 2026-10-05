@@ -1,0 +1,7 @@
+.git
+.venv
+.env
+__pycache__
+notebooks
+spark-warehouse
+DSGen-software-code-4.0.0

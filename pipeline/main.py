@@ -19,6 +19,9 @@ DATA_DIR = os.getenv("DATA_DIR")
 # Dynamically create the output path for Parquet files
 BASE_DIR = os.path.dirname(DATA_DIR)
 PARQUET_DIR = os.path.join(BASE_DIR, "parquet_1GB")
+print(f"Data input directory: {DATA_DIR}")
+print(f"Base directory: {BASE_DIR}")
+print(f"Parquet output directory: {PARQUET_DIR}")
 
 # 2. Initialize Spark Session
 spark = SparkSession.builder \
@@ -28,6 +31,7 @@ spark = SparkSession.builder \
 
 # 3. Read the official SQL file and clean it from comments
 sql_schema_path = os.path.join(TPCDS_TOOLS_DIR, "tpcds.sql")
+print(f"Reading SQL schema from: {sql_schema_path}")
 with open(sql_schema_path, "r") as f:
     sql_schema = f.read()
 
