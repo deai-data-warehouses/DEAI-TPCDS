@@ -26,6 +26,8 @@ DIALECT="netezza"
 
 mkdir -p "$OUTPUT_DIR"
 
+cd $TPCDS_TOOLS_DIR/tools
+
 for tpl in "$DIRECTORY"/query*.tpl; do    # tpl = /path/query_templates/query1.tpl
     template=$(basename "$tpl")           # template = query1.tpl
     name="${template%.tpl}"               # name = query1

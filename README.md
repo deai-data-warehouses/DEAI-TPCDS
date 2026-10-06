@@ -89,6 +89,35 @@ Options: `uv`, `venv`, etc.
   2. Read the queries from the `queries_1GB` folder and execute them one by one,
      measuring the execution time for each query.
 
+#### `benchmark.py` parameters
+
+All parameters are optional. With none of them, every query is executed.
+
+| Parameter | Description |
+|---|---|
+| `--limit N` | Run only the first `N` queries (in query order). |
+| `--query N` | Run only the file `queryN.sql`. Cannot be combined with `--limit`, `--start` or `--end`. |
+| `--start N` | Run the queries from `queryN.sql` onwards (inclusive). |
+| `--end N` | Run the queries up to `queryN.sql` (inclusive). |
+
+`--start`, `--end` and `--limit` can be combined; `--limit` is applied last.
+`--start` and `--end` use the query number from the file name, not its position.
+If exactly one query is executed, its error (if any) is also printed in the
+terminal, not only saved in the Excel report.
+
+```bash
+python pipeline/benchmark.py --query 5          # only query5.sql
+python pipeline/benchmark.py --limit 20         # query1 ... query20
+python pipeline/benchmark.py --start 10 --end 20  # query10 ... query20
+python pipeline/benchmark.py --start 10 --limit 3 # first 3 queries from query10
+```
+
+With Docker, add the parameters after the command:
+
+```bash
+docker compose run --rm pipeline python pipeline/benchmark.py --query 5
+```
+
 
 ### Run with Docker
 
@@ -120,3 +149,10 @@ docker compose run --rm pipeline python pipeline/benchmark.py
 The Compose service bind-mounts `data` and `parquet_1GB/` from the project
 directory. Generated Parquet files and query files therefore remain on the host
 after the container exits.
+
+---
+
+## References
+- [TPC-DS Benchmark Specification](https://www.tpc.org/tpcds/)
+- [Spark SQL API](https://spark.apache.org/docs/latest/api/sql/)
+- Claude (Sonnet 5.5 Medium)

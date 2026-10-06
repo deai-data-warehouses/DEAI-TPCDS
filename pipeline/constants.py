@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 from dotenv import load_dotenv
 from pyspark.sql import SparkSession
@@ -13,8 +14,15 @@ SQL_SCHEMA_PATH = os.path.join(TPCDS_TOOLS_DIR, "tpcds.sql")
 DATA_DIR    = os.path.join(SCENARIOS_DIR, "data_1GB")
 PARQUET_DIR = os.path.join(SCENARIOS_DIR, "parquet_1GB")
 QUERIES_DIR = os.path.join(SCENARIOS_DIR, "queries_1GB")
+REPORT_PATH = os.path.join(
+    SCENARIOS_DIR,
+    f"benchmark_report_1GB_{datetime.now():%Y%m%d_%H%M%S}.xlsx",
+)
 
 SPARK_SESSION = SparkSession.builder \
     .appName("TPCDS_Parquet_Conversion") \
-    .master("local[*]") \
+    .master("local[4]") \
+    .config("spark.driver.memory", "6g") \
+    .config("spark.sql.ansi.enable", "true") \
+    .config("spark.sql.ansi.doubleQuotedIdentifiers", "true") \
     .getOrCreate()
