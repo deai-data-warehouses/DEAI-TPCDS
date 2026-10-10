@@ -8,7 +8,7 @@ services:
     volumes:
       - ${TPCDS_TOOLS_DIR}:/opt/tpcds/tools
       - ${SCENARIOS_DIR}:/app/scenarios
-      - ./DSGen-software-code-4.0.0/query_templates:/opt/tpcds/query_templates
+      - ${TPCDS_TOOLS_DIR}/../query_templates:/opt/tpcds/query_templates
     command:
       - /bin/bash
       - -lc
