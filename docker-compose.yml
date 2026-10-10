@@ -4,8 +4,21 @@ services:
     working_dir: /app
     environment:
       TPCDS_TOOLS_DIR: /opt/tpcds/tools
-      DATA_DIR: /opt/tpcds/tools/data
+      SCENARIOS_DIR: /app/scenarios
     volumes:
-      - ./DSGen-software-code-4.0.0/tools:/opt/tpcds/tools
-      - ./DSGen-software-code-4.0.0/tools/data:/opt/tpcds/tools/data
-    command: ["python", "pipeline/main.py"]
+      - ${TPCDS_TOOLS_DIR}:/opt/tpcds/tools
+      - ${SCENARIOS_DIR}:/app/scenarios
+      - ./DSGen-software-code-4.0.0/query_templates:/opt/tpcds/query_templates
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        set -euo pipefail
+        template=/opt/tpcds/query_templates/netezza.tpl
+        if ! grep -Fqx 'define _END = "";' "$$template"; then
+          printf '%s\n' 'define _END = "";' >> "$$template"
+        fi
+        bash /app/scripts/generate_queries.sh \
+          --tpcds-tools-dir /opt/tpcds \
+          --output-dir "/app/scenarios/queries_1GB"
+        python /app/pipeline/main.py
