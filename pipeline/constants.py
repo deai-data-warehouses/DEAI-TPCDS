@@ -7,8 +7,8 @@ from pyspark.sql import SparkSession
 
 load_dotenv()
 
-TPCDS_TOOL_DIR = os.getenv("TPCDS_TOOL_DIR", "/input/tpcds-tool")
-SCENARIOS_DIR = os.getenv("SCENARIOS_DIR", "/app/scenarios")
+TPCDS_TOOL_DIR = os.getenv("TPCDS_TOOL_DIR")
+SCENARIOS_DIR = os.getenv("SCENARIOS_DIR")
 TPCDS_SCALE = os.getenv("TPCDS_SCALE", "1")
 
 if not re.fullmatch(r"0*[1-9][0-9]*", TPCDS_SCALE):
