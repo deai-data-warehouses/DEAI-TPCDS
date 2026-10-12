@@ -1,4 +1,5 @@
 # DEAI-TPCDS
+DEAI TPC-DS Benchmark Implementation for Data Warehouse Project
 
 TPC-DS benchmark pipeline using Apache Spark. Docker builds the TPC-DS utilities,
 generates the synthetic data and query files, converts the data to Parquet, and
@@ -21,14 +22,14 @@ to that copy, leaving the supplied TPC-DS source unchanged.
 
 ## Configure
 
-The suggested layout keeps the repository, TPC-DS source, and generated data as
-sibling directories:
+The suggested layout keeps the repository as parent to TPC-DS source and generated data folders:
 
 ```text
 workspace/
-├── DEAI-TPCDS/       # this repository
-├── tcpds-tool/       # unzipped TPC-DS download
-└── scenarios/        # generated files and benchmark reports
+└── DEAI-TPCDS/       # this repository
+    ├── tcpds-tool/       # unzipped TPC-DS download
+    └── scenarios/        # generated files and benchmark reports
+
 ```
 
 From the repository directory, create `.env` from the template:
@@ -40,8 +41,8 @@ Copy-Item .env.template .env
 Edit `.env` if the folders are elsewhere:
 
 ```dotenv
-TPCDS_TOOL_DIR=../tcpds-tool
-SCENARIOS_DIR=../scenarios
+TPCDS_TOOL_DIR=tcpds-tool
+SCENARIOS_DIR=scenarios
 TPCDS_SCALE=1
 ```
 
@@ -60,25 +61,43 @@ change:
 docker compose build
 ```
 
+The first build took my computer about 20 tries to run successfully, because the package downloads were timing out. Don't know if it's Bel Air's bad wifi or if the image size is so massive (500MB) that it's going to be like this every first time. Good luck.
+
 ### 1. Prepare
 
-Build `dsdgen` and `dsqgen`, generate the raw `.dat` data, and generate one SQL
+On the stage's first execution, some compatibility fixes are automatically applied as follows:
+1. In the `scenarios/.tpcds-tools/tools` dir:
+    - `date.c` — `getDateWeightFromJulian(jDay, nDistribution)` →
+      `getDateWeightFromJulian(int jDay, int nDistribution)`
+    - `tdefs.c` — `getSimpleTdefsByNumber(nTable)` → `getSimpleTdefsByNumber(int
+      nTable)`
+    - `tdef_functions.c` — `getTdefFunctionsByNumber(nTable)` →
+      `getTdefFunctionsByNumber(int nTable)`
+    - `Makefile` and `makefile` — added `-fcommon` to `LINUX_CFLAGS`
+2. In the `scenarios/.tpcds-tools/query_templates` dir:
+    - `netezza.tpl` - Fix bug by appending 'define _END = "";' to file
+
+To build `dsdgen` and `dsqgen`, generate the raw `.dat` data, and generate one SQL
 file per query template:
 
 ```powershell
 docker compose run --rm pipeline python pipeline/prepare.py
 ```
 
-Preparation checks for complete existing outputs and skips already completed
+Raw data generation can take a while and needs disk space appropriate to the
+selected scale factor. One execution on Gustavo's computer took
+3 hours for 1GB scale.
+
+Preparation stage checks for complete existing outputs and skips already completed
 work. Use `--force` to rebuild the tools and regenerate all raw data and query
-files:
+files if necessary:
 
 ```powershell
 docker compose run --rm pipeline python pipeline/prepare.py --force
 ```
 
-Raw data generation can take a while and needs disk space appropriate to the
-selected scale factor.
+It is possible to have multiple scales' data coexisting in the project's folder without problems.
+Just change the .env TPCDS_SCALE value and run the prepare stage again.
 
 ### 2. Convert
 
@@ -89,7 +108,7 @@ docker compose run --rm pipeline python pipeline/convert.py
 ```
 
 Completed Parquet tables are reused on subsequent runs. Use `--force` to
-overwrite and rebuild every table:
+overwrite and rebuild every table if necessary:
 
 ```powershell
 docker compose run --rm pipeline python pipeline/convert.py --force
@@ -118,7 +137,7 @@ a timestamped Excel report into the scenarios directory.
 
 ## Generated layout
 
-After preparation and conversion, the scenarios directory contains:
+After preparation and conversion, the scenarios directory contains (if scale = 1GB):
 
 ```text
 scenarios/
@@ -142,7 +161,7 @@ after the containers exit. The repository ignores local scenario artifacts and
 
 ## Run locally
 
-The individual Python stages can also be run outside Docker if Python, Java,
+The individual Python stages should also be able to run outside Docker if Python, Java,
 Spark prerequisites, and their dependencies are installed. Set the same
 `TPCDS_TOOL_DIR`, `SCENARIOS_DIR`, and `TPCDS_SCALE` environment variables.
 The preparation stage additionally requires Linux build tools (`make`, a C
@@ -152,3 +171,14 @@ compiler, `flex`, and `bison`).
 
 - [TPC-DS Benchmark Specification](https://www.tpc.org/tpcds/)
 - [Spark SQL API](https://spark.apache.org/docs/latest/api/sql/)
+
+
+# TO DO
+## Pending Fixes
+1. Evaluate if Python Notebooks still work under the new project structure. Fix if not.
+2. Validate if all current installations during first build are really necessary, to reduce the image size and speed up package download/install.
+3. Decide if we add the unzipped TPC-DS downloaded folder into the project repo, to make the setup trivial and be less prone to problems for future versions of TPC-DS (currently 4.0.0)
+4. See if it's necessary to have single spark session as global variable or if we transplant from constants.py to utils.py
+
+## Future Tasks
+- Implement module to get the results, both in csv and visualization, so when we execute the queries at a scale and at a version of the code we store the results in a proper way, so we can see how the execution times change in every new version of the code
