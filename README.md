@@ -1,158 +1,154 @@
 # DEAI-TPCDS
-DEAI TPC-DS Benchmark Implementation for Data Warehouse Project
 
-## Prerrequisites (to run LOCALLY)
+TPC-DS benchmark pipeline using Apache Spark. Docker builds the TPC-DS utilities,
+generates the synthetic data and query files, converts the data to Parquet, and
+runs the benchmark. The unzipped TPC-DS tool source is supplied by the user and
+is not included in this repository or image.
 
-### TPC-DS Tools
-Download the TCP-DS tool zip folder at
-[https://www.tpc.org/tpc_documents_current_versions/current_specifications5.asp](https://www.tpc.org/tpc_documents_current_versions/current_specifications5.asp)
-and unzip it.
+## Requirements
 
-During this `README`, the resulting unzipped folder, will be referred to as
-`tcpds-tool`.
+- Docker Engine and Docker Compose.
+- The TPC-DS tool archive downloaded from the
+  [TPC current specifications page](https://www.tpc.org/tpc_documents_current_versions/current_specifications5.asp)
+  and unzipped. The resulting directory must contain `tools/` (including
+  `tpcds.sql`) and `query_templates/`.
+- Enough host disk space for the generated raw data, Parquet data, and reports.
+  These can require substantial space, especially at scales larger than 1 GB.
 
-### TPC-DS synthetic data
-1. Make the following modifications to the files at the `tpcds-tools/tools` dir:
-    - `date.c` — `getDateWeightFromJulian(jDay, nDistribution)` →
-      `getDateWeightFromJulian(int jDay, int nDistribution)`
-    - `tdefs.c` — `getSimpleTdefsByNumber(nTable)` → `getSimpleTdefsByNumber(int
-      nTable)`
-    - `tdef_functions.c` — `getTdefFunctionsByNumber(nTable)` →
-      `getTdefFunctionsByNumber(int nTable)`
-    - `Makefile` and `makefile` — added `-fcommon` to `LINUX_CFLAGS`
+The container builds a writable copy of `tools/` and `query_templates/` in the
+scenarios directory. Compatibility fixes and compiled executables are applied
+to that copy, leaving the supplied TPC-DS source unchanged.
 
-3. Build the tool running `make`. This command generated two tools:
-  - `dsdgen`: for generating the synthetic data.
-  - `dsqgen`: for generating the queries.
+## Configure
 
-4. Generate the synthetic data at the desired folder (in this case I am using
-   `data`, which you need to create **beforehand**) using the generated tool.
-   This will create `.dat` files inside the specified folder.
-    ```bash
-    ./dsdgen -SCALE 1 -DIR ./data FORCE
-    ```
+The suggested layout keeps the repository, TPC-DS source, and generated data as
+sibling directories:
 
-### TPC-DS queries
-1. Go inside the `tpcsds-tool/query_templates` dir and fix the Netezza dialect
-   bug by appending the missing variable definition:
-   ```bash
-   echo 'define _END = "";' >> netezza.tpl
-    ```
-
-2. Generate the queries using the `scripts/generate_queries.sh` script in this
-   repo:`./scripts/generate_queries.sh --tpcds-tools-dir <dir> --output-dir <dir>`.
-   This will create 99 `sql` files inside the specified output folder.
-
-
-> ⚠️ **Up to this moment, we have the data, the schema (`tpcds-tool/tools/tpcds.sql`)
-and the queries, but we haven't connected anything yet.**
-
-Ideally, the folder structure at this point should be the following:
-
-```
-.
-├── DEAI-TPCDS    (this repo)
-├── scenarios     (or any name you want)
-│   ├── data_1GB
-│   └── queries_1GB
-└── tpcds-tool    (the unzipped TPC-DS tool folder)
+```text
+workspace/
+├── DEAI-TPCDS/       # this repository
+├── tcpds-tool/       # unzipped TPC-DS download
+└── scenarios/        # generated files and benchmark reports
 ```
 
-### Set environment variables
-Using `env.template` as a guide, fill in the dirs with the corresponding values:
-- `TPCDS_TOOLS_DIR`: the path to the unzipped TPC-DS tool folder. Using the
-  folder structure above, this would be `tpcds-tool/tools`.
-- `SCENARIOS_DIR`: the path to the folder containing the data and queries. Using
-  the folder structure above, this would be `scenarios`.
+From the repository directory, create `.env` from the template:
 
+```powershell
+Copy-Item .env.template .env
+```
 
-### Virtual environment
-Options: `uv`, `venv`, etc.
+Edit `.env` if the folders are elsewhere:
 
----
+```dotenv
+TPCDS_TOOL_DIR=../tcpds-tool
+SCENARIOS_DIR=../scenarios
+TPCDS_SCALE=1
+```
 
-## How to run
+Paths can be relative to the Compose file or absolute. On Windows, forward
+slashes are accepted in absolute Docker bind-mount paths, for example
+`C:/Users/name/data/tcpds-tool`. `TPCDS_SCALE` is the TPC-DS scale factor; the
+default `1` stores artifacts in folders named `data_1GB`, `queries_1GB`, and
+`parquet_1GB`.
+
+## Run the stages
+
+Build the image once, and rebuild it when the Dockerfile or Python dependencies
+change:
+
+```powershell
+docker compose build
+```
+
+### 1. Prepare
+
+Build `dsdgen` and `dsqgen`, generate the raw `.dat` data, and generate one SQL
+file per query template:
+
+```powershell
+docker compose run --rm pipeline python pipeline/prepare.py
+```
+
+Preparation checks for complete existing outputs and skips already completed
+work. Use `--force` to rebuild the tools and regenerate all raw data and query
+files:
+
+```powershell
+docker compose run --rm pipeline python pipeline/prepare.py --force
+```
+
+Raw data generation can take a while and needs disk space appropriate to the
+selected scale factor.
+
+### 2. Convert
+
+Convert the raw `.dat` files to Parquet:
+
+```powershell
+docker compose run --rm pipeline python pipeline/convert.py
+```
+
+Completed Parquet tables are reused on subsequent runs. Use `--force` to
+overwrite and rebuild every table:
+
+```powershell
+docker compose run --rm pipeline python pipeline/convert.py --force
+```
+
+Conversion fails with a list of missing raw inputs instead of silently
+producing an incomplete dataset.
+
+### 3. Benchmark
+
+Run all generated queries, or select a subset:
+
+```powershell
+docker compose run --rm pipeline python pipeline/benchmark.py
+docker compose run --rm pipeline python pipeline/benchmark.py --query 5
+docker compose run --rm pipeline python pipeline/benchmark.py --limit 20
+docker compose run --rm pipeline python pipeline/benchmark.py --start 10 --end 20
+docker compose run --rm pipeline python pipeline/benchmark.py --start 10 --limit 3
+```
+
+`--query N` runs only `queryN.sql` and cannot be combined with `--limit`,
+`--start`, or `--end`. The range flags use the query number in the filename,
+and `--limit` is applied after filtering. Benchmarking reads existing Parquet
+and query files; it never regenerates data, queries, or Parquet. Each run writes
+a timestamped Excel report into the scenarios directory.
+
+## Generated layout
+
+After preparation and conversion, the scenarios directory contains:
+
+```text
+scenarios/
+├── .tpcds-tools/
+│   ├── tools/                  # patched sources, schema, dsdgen, dsqgen
+│   └── query_templates/        # patched template copy
+├── data_1GB/
+│   └── *.dat
+├── queries_1GB/
+│   └── query*.sql
+├── parquet_1GB/
+│   └── <table-name>/
+│       ├── part-*.parquet
+│       └── _SUCCESS
+└── benchmark_report_1GB_<timestamp>.xlsx
+```
+
+This directory is bind-mounted from the host, so all generated files persist
+after the containers exit. The repository ignores local scenario artifacts and
+`.env`; do not commit generated data or local paths.
 
 ## Run locally
 
-**Only once you have done everything in the prerequisites section, you can run the benchmark locally.**
-
-- `pipeline/main.py` will:
-  1. Read the schema from `tpcds-tool/tools/tpcds.sql` and create empty tables
-     in Spark with the correct schema.
-  2. Read the raw `.dat` files from the `data_1GB` folder, attach the schema to
-     them, and write them to Parquet format in the `parquet_1GB` folder.
-
-- `pipeline/benchmark.py` will:
-  1. Read the Parquet files from the `parquet_1GB` folder and register them as
-     temporary views in Spark.
-  2. Read the queries from the `queries_1GB` folder and execute them one by one,
-     measuring the execution time for each query.
-
-#### `benchmark.py` parameters
-
-All parameters are optional. With none of them, every query is executed.
-
-| Parameter | Description |
-|---|---|
-| `--limit N` | Run only the first `N` queries (in query order). |
-| `--query N` | Run only the file `queryN.sql`. Cannot be combined with `--limit`, `--start` or `--end`. |
-| `--start N` | Run the queries from `queryN.sql` onwards (inclusive). |
-| `--end N` | Run the queries up to `queryN.sql` (inclusive). |
-
-`--start`, `--end` and `--limit` can be combined; `--limit` is applied last.
-`--start` and `--end` use the query number from the file name, not its position.
-If exactly one query is executed, its error (if any) is also printed in the
-terminal, not only saved in the Excel report.
-
-```bash
-python pipeline/benchmark.py --query 5          # only query5.sql
-python pipeline/benchmark.py --limit 20         # query1 ... query20
-python pipeline/benchmark.py --start 10 --end 20  # query10 ... query20
-python pipeline/benchmark.py --start 10 --limit 3 # first 3 queries from query10
-```
-
-With Docker, add the parameters after the command:
-
-```bash
-docker compose run --rm pipeline python pipeline/benchmark.py --query 5
-```
-
-
-### Run with Docker
-
-Docker runs the pipeline in Linux with Python, Java, and PySpark installed.
-First prepare the inputs described below and in the prerequisites:
-
-- Make sure the generated raw `.dat` files are in the  `data` folder inside
-  `tools`. If you wish for the data, Parquet, and query files to be elsewhere,
-  adjust both the 'volume' part of docker-compose.yml and the .env file to make
-  them talk to eachother
-- Keep the TPC-DS tools directory, including `tpcds.sql`, at
-  `DSGen-software-code-4.0.0/tools/`.
-- Generate `queries_1GB/query_0.sql` with `dsqgen` before running the benchmark.
-
-Build the image and convert the raw data files to Parquet:
-
-```bash
-docker compose build
-docker compose run --rm pipeline
-```
-Or just docker compose run --build --rm pipeline
-
-Run the benchmark after the Parquet files and query file are ready:
-
-```bash
-docker compose run --rm pipeline python pipeline/benchmark.py
-```
-
-The Compose service bind-mounts `data` and `parquet_1GB/` from the project
-directory. Generated Parquet files and query files therefore remain on the host
-after the container exits.
-
----
+The individual Python stages can also be run outside Docker if Python, Java,
+Spark prerequisites, and their dependencies are installed. Set the same
+`TPCDS_TOOL_DIR`, `SCENARIOS_DIR`, and `TPCDS_SCALE` environment variables.
+The preparation stage additionally requires Linux build tools (`make`, a C
+compiler, `flex`, and `bison`).
 
 ## References
+
 - [TPC-DS Benchmark Specification](https://www.tpc.org/tpcds/)
 - [Spark SQL API](https://spark.apache.org/docs/latest/api/sql/)
-- Claude (Sonnet 5.5 Medium)
