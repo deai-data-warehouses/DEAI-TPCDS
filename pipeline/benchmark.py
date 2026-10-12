@@ -6,7 +6,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
 from constants import PARQUET_DIR, QUERIES_DIR, REPORT_PATH, SPARK_SESSION
-from utils import register_tables_in_spark, sort_query_files
+from utils import normalize_sql_for_spark, register_tables_in_spark, sort_query_files
 
 parser = argparse.ArgumentParser(description="Run the TPC-DS benchmark queries.")
 parser.add_argument(
@@ -63,7 +63,7 @@ else:
 for query_file in query_files:
     query_path = os.path.join(QUERIES_DIR, query_file)
     with open(query_path, "r") as f:
-        raw_sql = f.read()
+        raw_sql = normalize_sql_for_spark(f.read())
 
     # Some files (e.g. query14) contain several statements separated by ";"
     statements = [stmt.strip() for stmt in raw_sql.split(";") if stmt.strip()]
