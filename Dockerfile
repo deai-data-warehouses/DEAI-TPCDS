@@ -29,4 +29,4 @@ COPY pipeline ./pipeline
 
 COPY scripts ./scripts
 
-CMD ["python", "pipeline/benchmark.py"]
+CMD ["python", "pipeline/main.py"]
