@@ -193,7 +193,7 @@ def main() -> None:
     if not staged or args.force:
         _stage_tool_source(source_dir)
 
-    _patch_sources(Path(TPCDS_TOOLS_DIR))
+    _patch_sources(Path(STAGED_TOOLS_DIR))
     _patch_netezza_template(Path(QUERY_TEMPLATES_DIR) / "netezza.tpl")
 
     schema_sql = Path(SQL_SCHEMA_PATH).read_text()
@@ -205,7 +205,7 @@ def main() -> None:
     data_complete = _raw_data_complete(table_names)
     queries_complete = _queries_complete(query_names)
     tools_ready = (Path(STAGED_TPCDS_DIR) / ".build-complete").is_file() and all(
-        (Path(TPCDS_TOOLS_DIR) / binary).is_file()
+        (Path(STAGED_TOOLS_DIR) / binary).is_file()
         for binary in ("dsdgen", "dsqgen")
     )
     if not args.force and data_complete and queries_complete and tools_ready:
@@ -217,11 +217,11 @@ def main() -> None:
         build_marker.unlink(missing_ok=True)
         subprocess.run(
             ["make", "-B"] if args.force else ["make"],
-            cwd=TPCDS_TOOLS_DIR,
+            cwd=STAGED_TOOLS_DIR,
             check=True,
         )
         for binary in ("dsdgen", "dsqgen"):
-            if not (Path(TPCDS_TOOLS_DIR) / binary).is_file():
+            if not (Path(STAGED_TOOLS_DIR) / binary).is_file():
                 raise RuntimeError(f"TPC-DS build did not produce {binary}")
         build_marker.touch()
     else:
@@ -233,14 +233,14 @@ def main() -> None:
         (data_dir / ".complete").unlink(missing_ok=True)
         subprocess.run(
             [
-                str(Path(TPCDS_TOOLS_DIR) / "dsdgen"),
+                str(Path(STAGED_TOOLS_DIR) / "dsdgen"),
                 "-SCALE",
                 TPCDS_SCALE,
                 "-DIR",
                 DATA_DIR,
                 "FORCE",
             ],
-            cwd=TPCDS_TOOLS_DIR,
+            cwd=STAGED_TOOLS_DIR,
             check=True,
         )
         if not _raw_data_files_present(table_names):

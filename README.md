@@ -47,9 +47,9 @@ TPCDS_SCALE=1
 
 Paths can be relative to the Compose file or absolute. On Windows, forward
 slashes are accepted in absolute Docker bind-mount paths, for example
-`C:/Users/name/data/tcpds-tool`. `TPCDS_SCALE` is the TPC-DS scale factor; the
-default `1` stores artifacts in folders named `data_1GB`, `queries_1GB`, and
-`parquet_1GB`.
+`C:/Users/name/data/tcpds-tool`. `TPCDS_SCALE` is a positive integer used as the TPC-DS
+scale factor; the default `1` stores artifacts in folders named `data_1GB`,
+`queries_1GB`, and `parquet_1GB`.
 
 ## Run the stages
 
