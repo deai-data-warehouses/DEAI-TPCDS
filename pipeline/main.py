@@ -71,4 +71,5 @@ for stmt in statements:
         print(f"  -> Parquet export completed successfully.")
 
 print("\nAll tables have been converted to Parquet!")
+input(f"Spark UI still up at {SPARK_SESSION.sparkContext.uiWebUrl} - press Enter to exit...")
 SPARK_SESSION.stop()

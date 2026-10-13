@@ -105,6 +105,7 @@ report.save(REPORT_PATH)
 print(f"\nReport saved to {REPORT_PATH}")
 
 print("\nBenchmark completed!")
+input(f"Spark UI still up at {SPARK_SESSION.sparkContext.uiWebUrl} - press Enter to exit...")
 try:
     SPARK_SESSION.sparkContext.cancelAllJobs()
     SPARK_SESSION.stop()

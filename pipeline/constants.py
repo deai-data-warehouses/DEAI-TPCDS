@@ -22,6 +22,8 @@ REPORT_PATH = os.path.join(
 SPARK_SESSION = SparkSession.builder \
     .appName("TPCDS_Parquet_Conversion") \
     .master("local[4]") \
+    .config("spark.ui.port", "4040") \
+    .config("spark.port.maxRetries", "0") \
     .config("spark.driver.memory", "6g") \
     .config("spark.sql.ansi.enable", "true") \
     .config("spark.sql.ansi.doubleQuotedIdentifiers", "true") \
