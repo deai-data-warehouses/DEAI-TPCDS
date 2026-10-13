@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
-from constants import PARQUET_DIR, QUERIES_DIR, RUNS_DIR, SPARK_SESSION
+from constants import RUNS_DIR, SPARK_SESSION, get_scenario_paths
 from utils import normalize_sql_for_spark, register_tables_in_spark, sort_query_files
 
 parser = argparse.ArgumentParser(description="Run the TPC-DS benchmark queries.")
@@ -36,6 +36,8 @@ if args.query is not None and any(
     v is not None for v in (args.limit, args.start, args.end)
 ):
     parser.error("--query cannot be combined with --limit, --start or --end")
+
+_, PARQUET_DIR, QUERIES_DIR = get_scenario_paths(args.scale_factor)
 
 run_id = str(uuid.uuid4())
 run_started_at = datetime.now(timezone.utc)

@@ -10,9 +10,16 @@ SCENARIOS_DIR   = os.getenv("SCENARIOS_DIR")
 
 SQL_SCHEMA_PATH = os.path.join(TPCDS_TOOLS_DIR, "tpcds.sql")
 
-DATA_DIR    = os.path.join(SCENARIOS_DIR, "data_1GB")
-PARQUET_DIR = os.path.join(SCENARIOS_DIR, "parquet_1GB")
-QUERIES_DIR = os.path.join(SCENARIOS_DIR, "queries_1GB")
+def get_scenario_paths(scale_factor):
+    label = f"{scale_factor:g}GB"
+    return (
+        os.path.join(SCENARIOS_DIR, f"data_{label}"),
+        os.path.join(SCENARIOS_DIR, f"parquet_{label}"),
+        os.path.join(SCENARIOS_DIR, f"queries_{label}"),
+    )
+
+
+DATA_DIR, PARQUET_DIR, QUERIES_DIR = get_scenario_paths(1)
 RUNS_DIR = os.path.join(SCENARIOS_DIR, "runs")
 
 SPARK_SESSION = SparkSession.builder \
