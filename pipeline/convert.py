@@ -1,6 +1,8 @@
 import argparse
 import re
+from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 
 from constants import (
     DATA_DIR,
@@ -70,6 +72,11 @@ def main() -> None:
         return
 
     parquet_dir.mkdir(parents=True, exist_ok=True)
+    parquet_generation_started = perf_counter()
+    print(
+        f"[{datetime.now():%Y-%m-%d %H:%M:%S}] "
+        "Generate parquet files started."
+    )
     spark = create_spark_session("TPCDS_Parquet_Conversion")
     try:
         spark.sparkContext.setLogLevel("ERROR")
@@ -110,6 +117,11 @@ def main() -> None:
     if incomplete:
         raise RuntimeError(f"Conversion left incomplete Parquet tables: {incomplete}")
     print(f"All tables have been converted to Parquet in {parquet_dir}.")
+    print(
+        f"[{datetime.now():%Y-%m-%d %H:%M:%S}] "
+        "Generate parquet files finalized "
+        f"(elapsed: {perf_counter() - parquet_generation_started:.2f}s)."
+    )
 
 
 if __name__ == "__main__":

@@ -2,7 +2,9 @@ import argparse
 import re
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 
 from constants import (
     DATA_DIR,
@@ -231,6 +233,11 @@ def main() -> None:
         data_dir = Path(DATA_DIR)
         data_dir.mkdir(parents=True, exist_ok=True)
         (data_dir / ".complete").unlink(missing_ok=True)
+        data_generation_started = perf_counter()
+        print(
+            f"[{datetime.now():%Y-%m-%d %H:%M:%S}] "
+            "Generate raw .dat files started."
+        )
         subprocess.run(
             [
                 str(Path(STAGED_TOOLS_DIR) / "dsdgen"),
@@ -246,6 +253,11 @@ def main() -> None:
         if not _raw_data_files_present(table_names):
             raise RuntimeError(f"Raw data generation left missing or empty files in {DATA_DIR}")
         (data_dir / ".complete").touch()
+        print(
+            f"[{datetime.now():%Y-%m-%d %H:%M:%S}] "
+            "Generate raw .dat files finalized "
+            f"(elapsed: {perf_counter() - data_generation_started:.2f}s)."
+        )
     else:
         print(f"Raw data is already complete in {DATA_DIR}; skipping generation.")
 
