@@ -91,10 +91,14 @@ Options: `uv`, `venv`, etc.
 
 #### `benchmark.py` parameters
 
-All parameters are optional. With none of them, every query is executed.
+`--scale-factor` is required and records the scale factor of the dataset being
+benchmarked. It does not generate or select the dataset; `PARQUET_DIR` in
+`pipeline/constants.py` determines which Parquet data is loaded. Query filters
+are optional; if none are provided, all queries are executed.
 
 | Parameter | Description |
 |---|---|
+| `--scale-factor N` | Required. Record the data scale factor for this run (for example, `1`). |
 | `--limit N` | Run only the first `N` queries (in query order). |
 | `--query N` | Run only the file `queryN.sql`. Cannot be combined with `--limit`, `--start` or `--end`. |
 | `--start N` | Run the queries from `queryN.sql` onwards (inclusive). |
@@ -106,16 +110,24 @@ If exactly one query is executed, its error (if any) is also printed in the
 terminal, not only saved in the Excel report.
 
 ```bash
-python pipeline/benchmark.py --query 5          # only query5.sql
-python pipeline/benchmark.py --limit 20         # query1 ... query20
-python pipeline/benchmark.py --start 10 --end 20  # query10 ... query20
-python pipeline/benchmark.py --start 10 --limit 3 # first 3 queries from query10
+python pipeline/benchmark.py --scale-factor 1 --query 5
+python pipeline/benchmark.py --scale-factor 1 --limit 20
+python pipeline/benchmark.py --scale-factor 1 --start 10 --end 20
+python pipeline/benchmark.py --scale-factor 1 --start 10 --limit 3
 ```
+
+Each invocation creates a unique folder under `SCENARIOS_DIR/runs/`, organized
+by UTC date and run ID, and saves one Excel workbook named
+`benchmark_report.xlsx` there. The workbook has a `Query Runs` sheet with one
+row per executed SQL statement and a `Run Summary` sheet with one row for the
+whole invocation. The same folder also contains `query_runs.csv` and
+`run_summary.csv`, exported from those respective sheets for analysis in a
+notebook or other tools.
 
 With Docker, add the parameters after the command:
 
 ```bash
-docker compose run --rm pipeline python pipeline/benchmark.py --query 5
+docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1 --query 5
 ```
 
 
@@ -143,7 +155,7 @@ Or just docker compose run --build --rm pipeline
 Run the benchmark after the Parquet files and query file are ready:
 
 ```bash
-docker compose run --rm pipeline python pipeline/benchmark.py
+docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1
 ```
 
 The Compose service bind-mounts `data` and `parquet_1GB/` from the project
