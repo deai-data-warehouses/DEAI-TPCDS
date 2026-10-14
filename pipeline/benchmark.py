@@ -81,9 +81,13 @@ def main() -> None:
         "--end", type=int, help="run queries up to query<END> (inclusive)"
     )
     parser.add_argument(
-        "--scale-factor", type=float, required=True, help="TPC-DS data scale factor used for this run"
+        "--scale-factor", type=int, required=True, help="TPC-DS data scale factor used for this run"
     )
     args = parser.parse_args()
+    
+    if args.scale_factor <= 0:
+        parser.error("--scale-factor must be a positive integer")
+        
     query_files = _select_query_files(parser, args)
     _ , parquet_dir, queries_dir = get_scenario_paths(args.scale_factor)
 

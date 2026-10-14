@@ -181,9 +181,11 @@ def main() -> None:
         help="rebuild the tools and regenerate raw data and query files",
     )
     parser.add_argument(
-            "--scale-factor", type=float, required=True, help="TPC-DS data scale factor used for this run"
+            "--scale-factor", type=int, required=True, help="TPC-DS data scale factor used for this run"
     )
     args = parser.parse_args()
+    if args.scale_factor <= 0:
+        parser.error("--scale-factor must be a positive integer")
 
     data_dir_str, _, queries_dir_str = get_scenario_paths(args.scale_factor)
     data_dir = Path(data_dir_str)
