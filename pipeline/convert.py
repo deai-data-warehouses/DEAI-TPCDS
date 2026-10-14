@@ -5,10 +5,9 @@ from pathlib import Path
 from time import perf_counter
 
 from constants import (
-    DATA_DIR,
-    PARQUET_DIR,
     SQL_SCHEMA_PATH,
     create_spark_session,
+    get_scenario_paths,
 )
 from utils import clean_sql_comments, get_table_names, parquet_table_is_complete
 
@@ -22,14 +21,23 @@ def main() -> None:
         action="store_true",
         help="rebuild all Parquet tables, overwriting existing outputs",
     )
+    parser.add_argument(
+        "--scale-factor",
+        type=float,
+        required=True,
+        help="TPC-DS data scale factor used for this run",
+    )
     args = parser.parse_args()
+
+    data_dir_str, parquet_dir_str, _ = get_scenario_paths(args.scale_factor)
+    data_dir = Path(data_dir_str)
+    parquet_dir = Path(parquet_dir_str)
 
     schema_path = Path(SQL_SCHEMA_PATH)
     if not schema_path.is_file():
         raise FileNotFoundError(
             f"TPC-DS schema not found at {schema_path}; run pipeline/prepare.py first."
         )
-    data_dir = Path(DATA_DIR)
     if not data_dir.is_dir():
         raise FileNotFoundError(
             f"Raw data directory not found at {data_dir}; run pipeline/prepare.py first."
@@ -61,7 +69,6 @@ def main() -> None:
             + ". Run pipeline/prepare.py to generate them."
         )
 
-    parquet_dir = Path(PARQUET_DIR)
     completed = [
         name
         for name in table_names

@@ -7,16 +7,15 @@ from pathlib import Path
 from time import perf_counter
 
 from constants import (
-    DATA_DIR,
     QUERY_TEMPLATES_DIR,
-    QUERIES_DIR,
     SCENARIOS_DIR,
     SQL_SCHEMA_PATH,
     STAGED_TPCDS_DIR,
-    TPCDS_SCALE,
     TPCDS_TOOL_DIR,
     STAGED_TOOLS_DIR,
+    get_scenario_paths,
 )
+
 from utils import get_table_names
 
 
@@ -113,21 +112,20 @@ def _expected_query_names() -> list[str]:
     return [f"{template.stem}.sql" for template in templates]
 
 
-def _raw_data_complete(table_names: list[str]) -> bool:
-    data_dir = Path(DATA_DIR)
-    return (data_dir / ".complete").is_file() and _raw_data_files_present(table_names)
+def _raw_data_complete(table_names: list[str], data_dir: Path) -> bool:
+    return (data_dir / ".complete").is_file() and _raw_data_files_present(
+        table_names, data_dir
+    )
 
-
-def _raw_data_files_present(table_names: list[str]) -> bool:
+def _raw_data_files_present(table_names: list[str], data_dir: Path) -> bool:
     return all(
-        (Path(DATA_DIR) / f"{table_name}.dat").is_file()
-        and (Path(DATA_DIR) / f"{table_name}.dat").stat().st_size > 0
+        (data_dir / f"{table_name}.dat").is_file()
+        and (data_dir / f"{table_name}.dat").stat().st_size > 0
         for table_name in table_names
     )
 
 
-def _queries_complete(query_names: list[str]) -> bool:
-    output_dir = Path(QUERIES_DIR)
+def _queries_complete(query_names: list[str], output_dir: Path) -> bool:
     return (output_dir / ".complete").is_file() and _query_files_present(
         output_dir, query_names
     )
@@ -140,8 +138,9 @@ def _query_files_present(output_dir: Path, query_names: list[str]) -> bool:
     )
 
 
-def _generate_queries(query_names: list[str]) -> None:
-    output_dir = Path(QUERIES_DIR)
+def _generate_queries(
+    query_names: list[str], output_dir: Path, scale_factor: float
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / ".complete").unlink(missing_ok=True)
     for old_query in output_dir.glob("query*.sql"):
@@ -155,9 +154,9 @@ def _generate_queries(query_names: list[str]) -> None:
             "--tpcds-tools-dir",
             STAGED_TPCDS_DIR,
             "--output-dir",
-            QUERIES_DIR,
+            str(output_dir),
             "--scale",
-            TPCDS_SCALE,
+            str(scale_factor),
         ],
         check=True,
     )
@@ -181,8 +180,14 @@ def main() -> None:
         action="store_true",
         help="rebuild the tools and regenerate raw data and query files",
     )
+    parser.add_argument(
+            "--scale-factor", type=float, required=True, help="TPC-DS data scale factor used for this run"
+    )
     args = parser.parse_args()
 
+    data_dir_str, _, queries_dir_str = get_scenario_paths(args.scale_factor)
+    data_dir = Path(data_dir_str)
+    queries_dir = Path(queries_dir_str)
     source_dir = Path(TPCDS_TOOL_DIR)
     if not source_dir.is_dir():
         raise FileNotFoundError(f"Unzipped TPC-DS tools directory not found: {source_dir}")
@@ -204,8 +209,8 @@ def main() -> None:
         raise RuntimeError(f"No TPC-DS tables found in {SQL_SCHEMA_PATH}")
     query_names = _expected_query_names()
 
-    data_complete = _raw_data_complete(table_names)
-    queries_complete = _queries_complete(query_names)
+    data_complete = _raw_data_complete(table_names, data_dir)
+    queries_complete = _queries_complete(query_names, queries_dir)
     tools_ready = (Path(STAGED_TPCDS_DIR) / ".build-complete").is_file() and all(
         (Path(STAGED_TOOLS_DIR) / binary).is_file()
         for binary in ("dsdgen", "dsqgen")
@@ -230,7 +235,6 @@ def main() -> None:
         print("TPC-DS utilities are already built; skipping compilation.")
 
     if args.force or not data_complete:
-        data_dir = Path(DATA_DIR)
         data_dir.mkdir(parents=True, exist_ok=True)
         (data_dir / ".complete").unlink(missing_ok=True)
         data_generation_started = perf_counter()
@@ -242,16 +246,16 @@ def main() -> None:
             [
                 str(Path(STAGED_TOOLS_DIR) / "dsdgen"),
                 "-SCALE",
-                TPCDS_SCALE,
+                str(args.scale_factor),
                 "-DIR",
-                DATA_DIR,
+                str(data_dir),
                 "FORCE",
             ],
             cwd=STAGED_TOOLS_DIR,
             check=True,
         )
-        if not _raw_data_files_present(table_names):
-            raise RuntimeError(f"Raw data generation left missing or empty files in {DATA_DIR}")
+        if not _raw_data_files_present(table_names, data_dir):
+            raise RuntimeError(f"Raw data generation left missing or empty files in {str(data_dir)}")
         (data_dir / ".complete").touch()
         print(
             f"[{datetime.now():%Y-%m-%d %H:%M:%S}] "
@@ -259,12 +263,12 @@ def main() -> None:
             f"(elapsed: {perf_counter() - data_generation_started:.2f}s)."
         )
     else:
-        print(f"Raw data is already complete in {DATA_DIR}; skipping generation.")
+        print(f"Raw data is already complete in {str(data_dir)}; skipping generation.")
 
     if args.force or not queries_complete:
-        _generate_queries(query_names)
+        _generate_queries(query_names, queries_dir, args.scale_factor)
     else:
-        print(f"Queries are already complete in {QUERIES_DIR}; skipping generation.")
+        print(f"Queries are already complete in {str(queries_dir)}; skipping generation.")
 
     print("TPC-DS preparation completed.")
 

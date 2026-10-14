@@ -74,11 +74,11 @@ On the stage's first execution, some compatibility fixes are automatically appli
 2. In the `scenarios/.tpcds-tools/query_templates` dir:
     - `netezza.tpl` - Fix bug by appending 'define _END = "";' to file
 
-To build `dsdgen` and `dsqgen`, generate the raw `.dat` data, and generate one SQL
+To build `dsdgen` and `dsqgen`, generate the raw `.dat` data (for 1GB scale), and generate one SQL
 file per query template:
 
 ```powershell
-docker compose run --rm pipeline python pipeline/prepare.py
+docker compose run --rm pipeline python pipeline/prepare.py --scale-factor 1
 ```
 
 Raw data generation can take a while and needs disk space appropriate to the
@@ -90,7 +90,7 @@ work. Use `--force` to rebuild the tools and regenerate all raw data and query
 files if necessary:
 
 ```powershell
-docker compose run --rm pipeline python pipeline/prepare.py --force
+docker compose run --rm pipeline python pipeline/prepare.py --scale-factor 1 --force
 ```
 
 It is possible to have multiple scales' data coexisting in the project's folder without problems.
@@ -98,17 +98,17 @@ Just change the --scale-factor value and run the prepare stage again.
 
 ### 2. Convert
 
-Convert the raw `.dat` files to Parquet:
+Convert the raw `.dat` files to Parquet (for the case of 1GB scale):
 
 ```powershell
-docker compose run --rm pipeline python pipeline/convert.py
+docker compose run --rm pipeline python pipeline/convert.py --scale-factor 1
 ```
 
 Completed Parquet tables are reused on subsequent runs. Use `--force` to
 overwrite and rebuild every table if necessary:
 
 ```powershell
-docker compose run --rm pipeline python pipeline/convert.py --force
+docker compose run --rm pipeline python pipeline/convert.py --scale-factor 1 --force
 ```
 
 Conversion fails with a list of missing raw inputs instead of silently
