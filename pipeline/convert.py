@@ -30,7 +30,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.scale_factor <= 0:
         parser.error("--scale-factor must be a positive integer")
-    
+
     data_dir_str, parquet_dir_str, _ = get_scenario_paths(args.scale_factor)
     data_dir = Path(data_dir_str)
     parquet_dir = Path(parquet_dir_str)
@@ -115,6 +115,7 @@ def main() -> None:
             if not parquet_table_is_complete(str(output_path)):
                 raise RuntimeError(f"Parquet output is incomplete for table {table_name}")
             print(f"Parquet export completed: {table_name}")
+        input(f"Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
     finally:
         spark.stop()
 

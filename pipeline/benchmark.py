@@ -3,10 +3,10 @@ import csv
 import os
 import subprocess
 import time
-from pathlib import Path
 import uuid
-from datetime import datetime, timezone
 
+from datetime import datetime, timezone
+from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
@@ -84,10 +84,10 @@ def main() -> None:
         "--scale-factor", type=int, required=True, help="TPC-DS data scale factor used for this run"
     )
     args = parser.parse_args()
-    
+
     if args.scale_factor <= 0:
         parser.error("--scale-factor must be a positive integer")
-        
+
     query_files = _select_query_files(parser, args)
     _ , parquet_dir, queries_dir = get_scenario_paths(args.scale_factor)
 
@@ -300,12 +300,12 @@ def main() -> None:
             worksheet.column_dimensions[
                 worksheet.cell(row=1, column=column).column_letter
             ].width = width
-        
+
         # Wrap long cell contents and align data rows to the top of each cell.
         for row in worksheet.iter_rows(min_row=2):
             for cell in row:
                 cell.alignment = Alignment(wrap_text=True, vertical="top")
-        
+
         # Keep the header row visible while scrolling down the worksheet.
         worksheet.freeze_panes = "A2"
 
@@ -326,6 +326,7 @@ def main() -> None:
                 for row in worksheet.iter_rows()
             )
         print(f"CSV saved to {csv_path}")
+    input(f"Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
     try:
         spark.sparkContext.cancelAllJobs()
         spark.stop()

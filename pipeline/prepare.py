@@ -181,7 +181,7 @@ def main() -> None:
         help="rebuild the tools and regenerate raw data and query files",
     )
     parser.add_argument(
-            "--scale-factor", type=int, required=True, help="TPC-DS data scale factor used for this run"
+        "--scale-factor", type=int, required=True, help="TPC-DS data scale factor used for this run"
     )
     args = parser.parse_args()
     if args.scale_factor <= 0:

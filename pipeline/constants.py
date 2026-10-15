@@ -6,7 +6,7 @@ from pyspark.sql import SparkSession
 load_dotenv()
 
 TPCDS_TOOL_DIR = os.getenv("TPCDS_TOOL_DIR")
-SCENARIOS_DIR = os.getenv("SCENARIOS_DIR")
+SCENARIOS_DIR  = os.getenv("SCENARIOS_DIR")
 
 STAGED_TPCDS_DIR = os.path.join(SCENARIOS_DIR, ".tpcds-tools")
 STAGED_TOOLS_DIR = os.path.join(STAGED_TPCDS_DIR, "tools")
