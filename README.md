@@ -187,6 +187,8 @@ compiler, `flex`, and `bison`).
 
 - [TPC-DS Benchmark Specification](https://www.tpc.org/tpcds/)
 - [Spark SQL API](https://spark.apache.org/docs/latest/api/sql/)
+- [Mastering Broadcast Joins in PySpark: Optimizing Performance for Large-Scale Data Processing](https://www.sparkcodehub.com/pyspark/performance/broadcast-joins)
+- [https://www.sparkcodehub.com/pyspark/performance/broadcast-joins](https://medium.com/@sksami1997/spark-sql-engine-how-queries-are-optimized-and-executed-62cf5b3d3f84)
 
 
 # TO DO
