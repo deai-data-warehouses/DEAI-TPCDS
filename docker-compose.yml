@@ -1,3 +1,6 @@
+# All env vars are automatically read from .env file in the same directory as
+# this docker-compose.yml
+
 services:
   pipeline:
     build: .
@@ -6,6 +9,11 @@ services:
       TPCDS_TOOL_DIR: /input/tpcds-tool
       SCENARIOS_DIR: /app/scenarios
       TPCDS_SCALE: ${TPCDS_SCALE}
+      # Spark UI binds to SPARK_LOCAL_IP; 127.0.0.1 (set in the Dockerfile)
+      # is unreachable through the published port
+      SPARK_LOCAL_IP: 0.0.0.0
+    ports:
+      - "4040:4040"    # Spark UI
     volumes:
       - type: bind
         source: ${TPCDS_TOOL_DIR}

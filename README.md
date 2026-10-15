@@ -27,7 +27,9 @@ The suggested layout keeps the repository as parent to TPC-DS source and generat
 ```text
 workspace/
 └── DEAI-TPCDS/       # this repository
-    ├── tcpds-tool/       # unzipped TPC-DS download
+    ├── tpcds-tool/
+    │   ├── tools/    # (contains tpcds.sql, dsdgen source, ...)
+    │   └── query_templates/
     └── scenarios/        # generated files and benchmark reports
 
 ```
@@ -101,14 +103,14 @@ Just change the --scale-factor value and run the prepare stage again.
 Convert the raw `.dat` files to Parquet (for the case of 1GB scale):
 
 ```powershell
-docker compose run --rm pipeline python pipeline/convert.py --scale-factor 1
+docker compose run --rm --service-ports pipeline python pipeline/convert.py --scale-factor 1
 ```
 
 Completed Parquet tables are reused on subsequent runs. Use `--force` to
 overwrite and rebuild every table if necessary:
 
 ```powershell
-docker compose run --rm pipeline python pipeline/convert.py --scale-factor 1 --force
+docker compose run --rm --service-ports pipeline python pipeline/convert.py --scale-factor 1 --force
 ```
 
 Conversion fails with a list of missing raw inputs instead of silently
@@ -119,11 +121,11 @@ producing an incomplete dataset.
 Run all generated queries, or select a subset:
 
 ```powershell
-docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1
-docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1 --query 5
-docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1 --limit 20
-docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --end 20
-docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --limit 3
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --query 5
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --limit 20
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --end 20
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --limit 3
 ```
 
 | Parameter | Description |
@@ -185,6 +187,12 @@ compiler, `flex`, and `bison`).
 
 - [TPC-DS Benchmark Specification](https://www.tpc.org/tpcds/)
 - [Spark SQL API](https://spark.apache.org/docs/latest/api/sql/)
+- [Mastering Broadcast Joins in PySpark: Optimizing Performance for Large-Scale Data Processing](https://www.sparkcodehub.com/pyspark/performance/broadcast-joins)
+- [https://www.sparkcodehub.com/pyspark/performance/broadcast-joins](https://medium.com/@sksami1997/spark-sql-engine-how-queries-are-optimized-and-executed-62cf5b3d3f84)
+- [Spark Configuration (`spark.driver.memory`, `spark.driver.extraJavaOptions`)](https://spark.apache.org/docs/latest/configuration.html)
+- [Java 21 `System.gc()` API](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/System.html#gc())
+- [Java 21 `java` command options (`-XX:MinHeapFreeRatio`, `-XX:MaxHeapFreeRatio`)](https://docs.oracle.com/en/java/javase/21/docs/specs/man/java.html)
+- [Java 21 Garbage-First (G1) Garbage Collector Tuning](https://docs.oracle.com/en/java/javase/21/gctuning/garbage-first-garbage-collector-tuning.html)
 
 
 # TO DO

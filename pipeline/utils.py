@@ -36,8 +36,16 @@ def parquet_table_is_complete(table_path: str) -> bool:
 
 
 def normalize_sql_for_spark(sql_str: str) -> str:
-    """Remove TPC-DS day units from integer date arithmetic for Spark SQL."""
-    return re.sub(r"([+-]\s*\d+)\s+days?\b", r"\1", sql_str, flags=re.IGNORECASE)
+    """
+    Adapts a TPC-DS query to run in Spark SQL:
+      - Removes day units from integer date arithmetic.
+      - Replaces the non-existent column `c_last_review_date_sk` (query 30)
+        with `c_last_review_date`.
+    """
+    sql_str = re.sub(r"([+-]\s*\d+)\s+days?\b", r"\1", sql_str, flags=re.IGNORECASE)
+    return re.sub(
+        r"\bc_last_review_date_sk\b", "c_last_review_date", sql_str, flags=re.IGNORECASE
+    )
 
 
 def register_tables_in_spark(spark_session, parquet_dir):
