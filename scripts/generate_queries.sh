@@ -2,33 +2,41 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 --tpcds-tools-dir <dir> --output-dir <dir>" >&2
+    echo "Usage: $0 --tpcds-tools-dir <dir> --output-dir <dir> [--scale <scale>]" >&2
     exit 1
 }
 
 TPCDS_TOOLS_DIR=""
 OUTPUT_DIR=""
+SCALE="1"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --tpcds-tools-dir) TPCDS_TOOLS_DIR="${2:?missing value for $1}"; shift 2 ;;
         --output-dir)      OUTPUT_DIR="${2:?missing value for $1}"; shift 2 ;;
+        --scale)           SCALE="${2:?missing value for $1}"; shift 2 ;;
         -h|--help)         usage ;;
         *)                 echo "Unknown argument: $1" >&2; usage ;;
     esac
 done
 
 [[ -n "$TPCDS_TOOLS_DIR" && -n "$OUTPUT_DIR" ]] || usage
+[[ "$SCALE" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+    echo "Scale must be a positive number: $SCALE" >&2
+    exit 1
+}
 
 DIRECTORY="$TPCDS_TOOLS_DIR/query_templates"
-SCALE=1
 DIALECT="netezza"
 
 mkdir -p "$OUTPUT_DIR"
-
-cd $TPCDS_TOOLS_DIR/tools
+cd "$TPCDS_TOOLS_DIR/tools"
 
 for tpl in "$DIRECTORY"/query*.tpl; do    # tpl = /path/query_templates/query1.tpl
+    [[ -f "$tpl" ]] || {
+        echo "No query*.tpl templates found in $DIRECTORY" >&2
+        exit 1
+    }
     template=$(basename "$tpl")           # template = query1.tpl
     name="${template%.tpl}"               # name = query1
 

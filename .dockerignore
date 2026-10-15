@@ -5,3 +5,5 @@ __pycache__
 notebooks
 spark-warehouse
 DSGen-software-code-4.0.0
+scenarios
+*.py[cod]

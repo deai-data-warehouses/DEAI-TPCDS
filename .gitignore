@@ -1,8 +1,15 @@
 __pycache__
+__pycache__/
+
 .venv
 .env
-scenarios
+
 DSGen-software-code-4.0.0/
-__pycache__/
+tpcds-tool/
+
+scenarios
+
 .ipynb_checkpoints/
 spark-warehouse/
+
+notebooks/

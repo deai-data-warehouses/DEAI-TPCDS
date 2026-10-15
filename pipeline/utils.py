@@ -1,5 +1,6 @@
 import os
 import re
+from pathlib import Path
 
 def clean_sql_comments(sql_str: str) -> str:
      """
@@ -16,9 +17,35 @@ def clean_sql_comments(sql_str: str) -> str:
     )
 
 
+def get_table_names(schema_sql: str) -> list[str]:
+    """Return table names declared in the TPC-DS schema, excluding metadata."""
+    names = re.findall(
+        r"\bcreate\s+table\s+([A-Za-z_]\w*)",
+        clean_sql_comments(schema_sql),
+        flags=re.IGNORECASE,
+    )
+    return [name.lower() for name in names if name.lower() != "dbgen_version"]
+
+
+def parquet_table_is_complete(table_path: str) -> bool:
+    path = Path(table_path)
+    return (
+        (path / "_SUCCESS").is_file()
+        and any(file.is_file() and file.stat().st_size > 0 for file in path.rglob("*.parquet"))
+    )
+
+
 def normalize_sql_for_spark(sql_str: str) -> str:
-    """Remove TPC-DS day units from integer date arithmetic for Spark SQL."""
-    return re.sub(r"([+-]\s*\d+)\s+days?\b", r"\1", sql_str, flags=re.IGNORECASE)
+    """
+    Adapts a TPC-DS query to run in Spark SQL:
+      - Removes day units from integer date arithmetic.
+      - Replaces the non-existent column `c_last_review_date_sk` (query 30)
+        with `c_last_review_date`.
+    """
+    sql_str = re.sub(r"([+-]\s*\d+)\s+days?\b", r"\1", sql_str, flags=re.IGNORECASE)
+    return re.sub(
+        r"\bc_last_review_date_sk\b", "c_last_review_date", sql_str, flags=re.IGNORECASE
+    )
 
 
 def register_tables_in_spark(spark_session, parquet_dir):
