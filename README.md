@@ -27,7 +27,9 @@ The suggested layout keeps the repository as parent to TPC-DS source and generat
 ```text
 workspace/
 └── DEAI-TPCDS/       # this repository
-    ├── tcpds-tool/       # unzipped TPC-DS download
+    ├── tpcds-tool/
+    │   ├── tools/    # (contains tpcds.sql, dsdgen source, ...)
+    │   └── query_templates/
     └── scenarios/        # generated files and benchmark reports
 
 ```
@@ -101,14 +103,14 @@ Just change the --scale-factor value and run the prepare stage again.
 Convert the raw `.dat` files to Parquet (for the case of 1GB scale):
 
 ```powershell
-docker compose run --rm pipeline python pipeline/convert.py --scale-factor 1
+docker compose run --rm --service-ports pipeline python pipeline/convert.py --scale-factor 1
 ```
 
 Completed Parquet tables are reused on subsequent runs. Use `--force` to
 overwrite and rebuild every table if necessary:
 
 ```powershell
-docker compose run --rm pipeline python pipeline/convert.py --scale-factor 1 --force
+docker compose run --rm --service-ports pipeline python pipeline/convert.py --scale-factor 1 --force
 ```
 
 Conversion fails with a list of missing raw inputs instead of silently
@@ -119,11 +121,11 @@ producing an incomplete dataset.
 Run all generated queries, or select a subset:
 
 ```powershell
-docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1
-docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1 --query 5
-docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1 --limit 20
-docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --end 20
-docker compose run --rm pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --limit 3
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --query 5
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --limit 20
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --end 20
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --limit 3
 ```
 
 | Parameter | Description |
