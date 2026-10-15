@@ -30,8 +30,9 @@ def create_spark_session(app_name: str) -> SparkSession:
         .config("spark.ui.port", "4040") \
         .config("spark.port.maxRetries", "0") \
         .config("spark.driver.memory", "6g") \
-        # Shrink the heap after a full GC so the JVM returns unused memory to the
-        # OS instead of holding on to it (keeps at most 30% of the heap free).
+        # Shrink the heap after a full GC so the JVM returns unused memory to
+        # the OS instead of holding on to it (keeps at most 30% of the heap
+        # free).
         .config("spark.driver.extraJavaOptions",
                 "-XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30") \
         .config("spark.sql.ansi.enable", "true") \
