@@ -160,28 +160,29 @@ def main() -> None:
     print("  TPC-DS BENCHMARK START   ")
     print("=================================\n")
 
-    # Create in-memory Excel file
-    report = Workbook()
-    query_sheet = report.active
-    # Worksheet tab to store results from the query runs
-    query_sheet.title = "Query Runs"
-    query_headers = [
-        "run_id",
-        "started_at",
-        "query_id",
-        "query_file",
-        "statement_part",
-        "label",
-        "elapsed_seconds",
-        "status",
-        "row_count",
-        "error",
-        "scale_factor",
-        "code_version",
-        "working_tree_dirty",
-        "sql",
-    ]
-    query_sheet.append(query_headers)
+# Create in-memory Excel file
+report = Workbook()
+query_sheet = report.active
+# Worksheet tab to store results fro the wuery runs
+query_sheet.title = "Query Runs"
+query_headers = [
+    "run_id",
+    "started_at",
+    "query_id",
+    "query_file",
+    "statement_part",
+    "label",
+    "elapsed_seconds",
+    "status",
+    "row_count",
+    "error",
+    "scale_factor",
+    "code_version",
+    "working_tree_dirty",
+    "sql",
+    "test_run",
+]
+query_sheet.append(query_headers)
 
     for query_file in query_files:
         query_path = os.path.join(queries_dir, query_file)
@@ -233,24 +234,29 @@ def main() -> None:
                     # Construct individual record for every query after success or failure
                     query_number = int(query_file.removeprefix("query").removesuffix(".sql"))
 
-                    query_records.append({
-                        "run_id": run_id,
-                        "started_at": started_at,
-                        "query_id": query_number,
-                        "query_file": query_file,
-                        "statement_part": i,
-                        "label": label,
-                        "elapsed_seconds": elapsed,
-                        "status": status,
-                        "row_count": rows,
-                        "error": error[:32767],
-                        "scale_factor": args.scale_factor,
-                        "code_version": code_version,
-                        "working_tree_dirty": working_tree_dirty,
-                        "sql": sql[:32767],
-                    })
+        query_records.append(
+            {
+                "run_id": run_id,
+                "started_at": started_at,
+                "query_id": query_number,
+                "query_file": query_file,
+                "statement_part": i,
+                "label": label,
+                "elapsed_seconds": elapsed,
+                "status": status,
+                "row_count": rows,
+                "error": error[:32767],
+                "scale_factor": args.scale_factor,
+                "code_version": code_version,
+                "working_tree_dirty": working_tree_dirty,
+                "sql": sql[:32767],
+                "test_run": args.test_run,
+            }
+        )
 
-                    query_sheet.append([record_value for record_value in query_records[-1].values()])
+        query_sheet.append(
+            [record_value for record_value in query_records[-1].values()]
+        )
 
             # Force a full JVM garbage collection between statements (outside
             # the timed section). Otherwise the heap keeps the memory grown by
@@ -320,6 +326,11 @@ def main() -> None:
         # Keep the header row visible while scrolling down the worksheet.
         worksheet.freeze_panes = "A2"
 
+# Cleaner folder structure for test runs
+if args.test_run:
+    run_directory = os.path.join(run_directory, "test")
+    os.makedirs(run_directory, exist_ok=True)
+    report_path = os.path.join(run_directory, "benchmark_report.xlsx")
 
     report.save(report_path)
     print(f"\nReport saved to {report_path}")
