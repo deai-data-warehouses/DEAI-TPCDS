@@ -165,23 +165,16 @@ def main() -> None:
     query_sheet = report.active
     # Worksheet tab to store results from the query runs
     query_sheet.title = "Query Runs"
+
     query_headers = [
-        "run_id",
-        "started_at",
-        "query_id",
-        "query_file",
-        "statement_part",
-        "label",
-        "elapsed_seconds",
-        "status",
-        "row_count",
-        "error",
-        "scale_factor",
-        "code_version",
-        "working_tree_dirty",
-        "sql",
+        "run_id", "started_at", "query_id", "query_file", "statement_part", "label",
+        "elapsed_seconds", "min_seconds", "max_seconds", "avg_seconds", 
+        "status", "row_count", "error", "scale_factor", "code_version", "working_tree_dirty", "sql",
     ]
     query_sheet.append(query_headers)
+
+    # multiple runs for each query to get more stable timing results
+    NUM_RUNS = 5
 
     for query_file in query_files:
         query_path = os.path.join(queries_dir, query_file)
@@ -190,67 +183,62 @@ def main() -> None:
 
         statements = [stmt.strip() for stmt in raw_sql.split(";") if stmt.strip()]
         if len(statements) > 1:
-            print(
-                f"{query_file} contains {len(statements)} queries, "
-                "executing all of them"
-            )
+            print(f"{query_file} contains {len(statements)} queries, executing all of them")
 
         for i, sql in enumerate(statements, start=1):
             label = f"{query_file} (part {i}/{len(statements)})" if len(statements) > 1 else query_file
-            print(f"Executing {label}...")
-            start_time = time.perf_counter()
-            try:
-                rows = spark.sql(sql).count()
-                elapsed = time.perf_counter() - start_time
-                print(f"✅ OK! Time: {elapsed:.2f} s (Rows: {rows})")
-                status, error = "success", ""
-            except Exception as e:
-                elapsed = time.perf_counter() - start_time
-                print(f"❌ FAILED in {elapsed:.2f} s")
-                rows = None
-                status, error = "error", str(e)
-                if len(query_files) == 1:
-                    print(f"\n{error}\n")
-                for index, sql in enumerate(statements, start=1):
-                    label = (
-                        f"{query_file} (part {index}/{len(statements)})"
-                        if len(statements) > 1
-                        else query_file
-                    )
-                    print(f"Executing {label}...")
-                    start_time = time.time()
-                    try:
-                        rows = spark.sql(sql).count()
-                        elapsed = time.time() - start_time
-                        print(f"✅ OK! Time: {elapsed:.2f} s (Rows: {rows})")
-                        status, result, error = "success", f"{rows} rows", ""
-                    except Exception as exception:
-                        elapsed = time.time() - start_time
-                        print(f"❌ FAILED in {elapsed:.2f} s")
-                        status, result, error = "error", "", str(exception)
-                        if len(query_files) == 1:
-                            print(f"\n{error}\n")
-                    # Construct individual record for every query after success or failure
-                    query_number = int(query_file.removeprefix("query").removesuffix(".sql"))
+            print(f"Executing {label} ({NUM_RUNS} runs)...")
 
-                    query_records.append({
-                        "run_id": run_id,
-                        "started_at": started_at,
-                        "query_id": query_number,
-                        "query_file": query_file,
-                        "statement_part": i,
-                        "label": label,
-                        "elapsed_seconds": elapsed,
-                        "status": status,
-                        "row_count": rows,
-                        "error": error[:32767],
-                        "scale_factor": args.scale_factor,
-                        "code_version": code_version,
-                        "working_tree_dirty": working_tree_dirty,
-                        "sql": sql[:32767],
-                    })
+            run_times = []
+            status, error, rows = "success", "", None
 
-                    query_sheet.append([record_value for record_value in query_records[-1].values()])
+            for run_iter in range(NUM_RUNS):
+                start_time = time.perf_counter()
+                try:
+                    rows = spark.sql(sql).count()
+                    elapsed = time.perf_counter() - start_time
+                    run_times.append(elapsed)
+                    print(f"  - Run {run_iter + 1}: ✅ {elapsed:.2f} s (Rows: {rows})")
+                except Exception as e:
+                    elapsed = time.perf_counter() - start_time
+                    print(f"  - Run {run_iter + 1}: ❌ FAILED in {elapsed:.2f} s")
+                    status, error = "error", str(e)
+                    if len(query_files) == 1:
+                        print(f"\n{error}\n")
+                    break
+
+            if status == "success" and run_times:
+                avg_time = sum(run_times) / len(run_times)
+                min_time = min(run_times)
+                max_time = max(run_times)
+                final_elapsed = avg_time
+            else:
+                final_elapsed = elapsed
+                min_time, max_time, avg_time = None, None, None
+
+            query_number = int(query_file.removeprefix("query").removesuffix(".sql"))
+
+            query_records.append({
+                "run_id": run_id,
+                "started_at": started_at,
+                "query_id": query_number,
+                "query_file": query_file,
+                "statement_part": i,
+                "label": label,
+                "elapsed_seconds": final_elapsed,
+                "min_seconds": min_time,
+                "max_seconds": max_time,
+                "avg_seconds": avg_time,
+                "status": status,
+                "row_count": rows,
+                "error": error[:32767],
+                "scale_factor": args.scale_factor,
+                "code_version": code_version,
+                "working_tree_dirty": working_tree_dirty,
+                "sql": sql[:32767],
+            })
+
+            query_sheet.append([record_value for record_value in query_records[-1].values()])
 
             # Force a full JVM garbage collection between statements (outside
             # the timed section). Otherwise the heap keeps the memory grown by
@@ -298,7 +286,7 @@ def main() -> None:
     # Format both Excel worksheets. Each tuple pairs a worksheet with the
     # display width for each of its columns.
     for worksheet, widths in (
-        (query_sheet, (36, 28, 10, 18, 15, 30, 18, 12, 12, 60, 14, 14, 18, 60)),
+        (query_sheet, (36, 28, 10, 18, 15, 30, 18, 14, 14, 14, 12, 12, 60, 14, 14, 18, 60)),
         (summary_sheet, (36, 28, 14, 50, 50, 14, 18, 20, 20, 22, 22, 20, 20, 20)),
     ):
         # Make the first row, which contains the column names, bold.
