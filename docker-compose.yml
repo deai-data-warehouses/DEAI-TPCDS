@@ -1,10 +1,23 @@
 # All env vars are automatically read from .env file in the same directory as
 # this docker-compose.yml
+name: tpcds-pipeline
 
 services:
   pipeline:
     build: .
     working_dir: /app
+    # Runs as root, then hands scenarios/ back to the host user so it can be
+    # edited without sudo. Set HOST_UID/HOST_GID in .env if yours aren't 1000
+    # The entrypoint wraps whatever command runs, including overrides like
+    # `docker compose run pipeline python pipeline/benchmark.py ...`
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        trap 'chown -R ${HOST_UID:-1000}:${HOST_GID:-1000} /app/scenarios' EXIT;
+        "$$@"
+      - sh
+    command: ["python", "pipeline/main.py"]
     environment:
       TPCDS_TOOL_DIR: /input/tpcds-tool
       SCENARIOS_DIR: /app/scenarios
