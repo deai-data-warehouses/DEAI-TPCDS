@@ -165,7 +165,7 @@ def main() -> None:
     query_sheet = report.active
     # Worksheet tab to store results from the query runs
     query_sheet.title = "Query Runs"
-    
+
     query_headers = [
         "run_id", "started_at", "query_id", "query_file", "statement_part", "label",
         "elapsed_seconds", "min_seconds", "max_seconds", "avg_seconds", 
@@ -174,7 +174,7 @@ def main() -> None:
     query_sheet.append(query_headers)
 
     # multiple runs for each query to get more stable timing results
-    NUM_RUNS = 3 
+    NUM_RUNS = 5
 
     for query_file in query_files:
         query_path = os.path.join(queries_dir, query_file)
@@ -188,10 +188,10 @@ def main() -> None:
         for i, sql in enumerate(statements, start=1):
             label = f"{query_file} (part {i}/{len(statements)})" if len(statements) > 1 else query_file
             print(f"Executing {label} ({NUM_RUNS} runs)...")
-            
+
             run_times = []
             status, error, rows = "success", "", None
-            
+
             for run_iter in range(NUM_RUNS):
                 start_time = time.perf_counter()
                 try:
@@ -205,13 +205,13 @@ def main() -> None:
                     status, error = "error", str(e)
                     if len(query_files) == 1:
                         print(f"\n{error}\n")
-                    break  
-            
+                    break
+
             if status == "success" and run_times:
                 avg_time = sum(run_times) / len(run_times)
                 min_time = min(run_times)
                 max_time = max(run_times)
-                final_elapsed = avg_time 
+                final_elapsed = avg_time
             else:
                 final_elapsed = elapsed
                 min_time, max_time, avg_time = None, None, None
