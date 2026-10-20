@@ -2,6 +2,7 @@ import argparse
 import csv
 import os
 import subprocess
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
@@ -13,8 +14,10 @@ from constants import (
     create_spark_session,
     get_scenario_paths,
 )
+from jinja2 import StrictUndefined, Template
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
+from pyspark.sql import SparkSession
 from utils import (
     get_table_names,
     normalize_sql_for_spark,
@@ -22,6 +25,44 @@ from utils import (
     register_tables_in_spark,
     sort_query_files,
 )
+
+# Make the repository-root config package importable when run as a script.
+project_root = str(Path(__file__).resolve().parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from config.config import options
+
+
+def set_session_configurations(
+    spark_session: SparkSession,
+) -> dict[str, int | bool]:
+    """
+    Apply run options to Spark and return them for inclusion in run metadata.
+    """
+    run_configuration: dict[str, int | bool] = {
+        "num_runs": options.general.num_runs,
+        "use_partition": options.spark.use_partition,
+        "use_broadcast_joins_hints": options.spark.use_broadcast_joins_hints,
+        "spark_adaptive_enabled": options.spark.adaptative_enabled,
+        "spark_adaptive_coalesce_partitions_enabled": (
+            options.spark.adaptative_coalesce_partitions
+        ),
+        "spark_adaptive_skew_join_enabled": options.spark.adapatative_skew_join,
+    }
+    spark_settings = {
+        "spark.sql.adaptive.enabled": "spark_adaptive_enabled",
+        "spark.sql.adaptive.coalescePartitions.enabled": (
+            "spark_adaptive_coalesce_partitions_enabled"
+        ),
+        "spark.sql.adaptive.skewJoin.enabled": "spark_adaptive_skew_join_enabled",
+    }
+
+    for spark_key, configuration_key in spark_settings.items():
+        spark_session.conf.set(
+            spark_key, str(run_configuration[configuration_key]).lower()
+        )
+    return run_configuration
 
 
 def _select_query_files(
@@ -151,7 +192,10 @@ def main() -> None:
         code_version = "unknown"
         working_tree_dirty = None
 
+    # Create session and configurations
     spark = create_spark_session("TPCDS_Benchmark")
+    run_configuration = set_session_configurations(spark)
+
     run_start = time.perf_counter()
     query_records = []
     spark.sparkContext.setLogLevel("ERROR")
@@ -170,9 +214,6 @@ def main() -> None:
     query_sheet.title = "Query Runs"
 
     query_headers = [
-        "run_id", "started_at", "query_id", "query_file", "statement_part", "label",
-        "elapsed_seconds", "min_seconds", "max_seconds", "avg_seconds", 
-        "status", "row_count", "error", "scale_factor", "code_version", "working_tree_dirty", "sql", "test_run"
         "run_id",
         "started_at",
         "query_id",
@@ -191,16 +232,19 @@ def main() -> None:
         "working_tree_dirty",
         "sql",
         "test_run",
-    ]
+    ] + list(run_configuration)
     query_sheet.append(query_headers)
-
-    # multiple runs for each query to get more stable timing results
-    NUM_RUNS = 5
 
     for query_file in query_files:
         query_path = os.path.join(queries_dir, query_file)
         with open(query_path, "r", encoding="utf-8") as query_stream:
-            raw_sql = normalize_sql_for_spark(query_stream.read())
+            # a
+            sql_template = query_stream.read()
+            rendered_sql = Template(sql_template, undefined=StrictUndefined).render(
+                options=options
+            )
+            # Normalize the SQL for Spark (remove comments, etc.)
+            raw_sql = normalize_sql_for_spark(rendered_sql)
 
         statements = [stmt.strip() for stmt in raw_sql.split(";") if stmt.strip()]
         if len(statements) > 1:
@@ -214,12 +258,12 @@ def main() -> None:
                 if len(statements) > 1
                 else query_file
             )
-            print(f"Executing {label} ({NUM_RUNS} runs)...")
+            print(f"Executing {label} ({options.general.num_runs} runs)...")
 
             run_times = []
             status, error, rows = "success", "", None
 
-            for run_iter in range(NUM_RUNS):
+            for run_iter in range(options.general.num_runs):
                 start_time = time.perf_counter()
                 try:
                     rows = spark.sql(sql).count()
@@ -265,12 +309,10 @@ def main() -> None:
                     "working_tree_dirty": working_tree_dirty,
                     "sql": sql[:32767],
                     "test_run": args.test_run,
+                    **run_configuration,
                 }
             )
-
-        query_sheet.append(
-            [record_value for record_value in query_records[-1].values()]
-        )
+            query_sheet.append(list(query_records[-1].values()))
 
         # Force a full JVM garbage collection between statements (outside
         # the timed section). Otherwise the heap keeps the memory grown by
@@ -307,6 +349,8 @@ def main() -> None:
         "attempted_statements": len(query_records),
         "successful_statements": len(successful_records),
         "failed_statements": len(query_records) - len(successful_records),
+        "test_run": args.test_run,
+        **run_configuration,
     }
     summary_sheet = report.create_sheet("Run Summary")
     summary_headers = list(summary)
@@ -334,27 +378,27 @@ def main() -> None:
 
         worksheet.freeze_panes = "A2"
 
-    # Cleaner folder structure for test runs
     if args.test_run:
         run_directory = os.path.join(run_directory, "test")
         os.makedirs(run_directory, exist_ok=True)
         report_path = os.path.join(run_directory, "benchmark_report.xlsx")
 
-        report.save(report_path)
-        print(f"\nReport saved to {report_path}")
+    report.save(report_path)
+    print(f"\nReport saved to {report_path}")
 
-        # Save the two sheets as separate csv files for downstream analysis
-        for worksheet, csv_filename in (
-            (query_sheet, "query_runs.csv"),
-            (summary_sheet, "run_summary.csv"),
-        ):
-            csv_path = os.path.join(run_directory, csv_filename)
-            with open(csv_path, "w", newline="", encoding="utf-8") as csv_file:
-                writer = csv.writer(csv_file)
-                writer.writerows(
-                    [cell.value for cell in row] for row in worksheet.iter_rows()
-                )
-            print(f"CSV saved to {csv_path}")
+    for worksheet, csv_filename in (
+        (query_sheet, "query_runs.csv"),
+        (summary_sheet, "run_summary.csv"),
+    ):
+        csv_path = os.path.join(run_directory, csv_filename)
+        with open(csv_path, "w", newline="", encoding="utf-8") as csv_file:
+            writer = csv.writer(csv_file, delimiter=";")
+            writer.writerows(
+                [cell.value for cell in row] for row in worksheet.iter_rows()
+            )
+        print(f"CSV saved to {csv_path}")
+
+    if args.test_run:
         input(
             f"Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit..."
         )

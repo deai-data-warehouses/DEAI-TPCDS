@@ -144,7 +144,11 @@ by UTC date and run ID, and saves one Excel workbook named
 row per executed SQL statement and a `Run Summary` sheet with one row for the
 whole invocation. The same folder also contains `query_runs.csv` and
 `run_summary.csv`, exported from those respective sheets for analysis in a
-notebook or other tools.
+notebook or other tools. Both outputs include the run configuration, including
+the number of repetitions and the enabled partitioning, broadcast-hint, and
+adaptive query execution options. Results are saved for both normal and test
+runs; test-run results are stored in a `test/` subfolder, and both CSV files
+include a `test_run` column indicating the run type.
 
 ## Generated layout
 
