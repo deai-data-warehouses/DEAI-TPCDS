@@ -131,7 +131,6 @@ def main() -> None:
 
     try:
         repository_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        # Save the short commit hash, control code version
         code_version = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             check=True,
@@ -139,8 +138,6 @@ def main() -> None:
             text=True,
             cwd=repository_root,
         ).stdout.strip()
-        # Record in the reporting if the run used coded different from the current commit
-        # If a file has uncommited edits it will be True
         working_tree_dirty = bool(
             subprocess.run(
                 ["git", "status", "--porcelain", "--untracked-files=no"],
@@ -155,10 +152,8 @@ def main() -> None:
         working_tree_dirty = None
 
     spark = create_spark_session("TPCDS_Benchmark")
-    # Measure durations
     run_start = time.perf_counter()
     query_records = []
-    # Reduce Spark log verbosity to keep the terminal clean
     spark.sparkContext.setLogLevel("ERROR")
     print("Registering temporary views from Parquet files...")
     register_tables_in_spark(spark, parquet_dir)
@@ -204,7 +199,7 @@ def main() -> None:
 
     for query_file in query_files:
         query_path = os.path.join(queries_dir, query_file)
-        with open(query_path, "r") as query_stream:
+        with open(query_path, "r", encoding="utf-8") as query_stream:
             raw_sql = normalize_sql_for_spark(query_stream.read())
 
         statements = [stmt.strip() for stmt in raw_sql.split(";") if stmt.strip()]
@@ -288,13 +283,11 @@ def main() -> None:
         except Exception:
             pass
 
-    # Capture benchmark duration before preparing and saving the workbook.
     run_elapsed_seconds = time.perf_counter() - run_start
     successful_records = [r for r in query_records if r["status"] == "success"]
     all_query_times = [r["elapsed_seconds"] for r in query_records]
     successful_query_times = [r["elapsed_seconds"] for r in successful_records]
 
-    # TODO: Modularize the code better, this could be in a different file
     summary = {
         "run_id": run_id,
         "started_at": started_at,
@@ -320,8 +313,6 @@ def main() -> None:
     summary_sheet.append(summary_headers)
     summary_sheet.append(list(summary.values()))
 
-    # Format both Excel worksheets. Each tuple pairs a worksheet with the
-    # display width for each of its columns.
     for worksheet, widths in (
         (
             query_sheet,
@@ -329,23 +320,18 @@ def main() -> None:
         ),
         (summary_sheet, (36, 28, 14, 50, 50, 14, 18, 20, 20, 22, 22, 20, 20, 20)),
     ):
-        # Make the first row, which contains the column names, bold.
         for cell in worksheet[1]:
             cell.font = Font(bold=True)
 
-        # Set each column's width. Excel column numbers start at 1, while
-        # openpyxl converts those numbers to letters such as A, B, and C.
         for column, width in enumerate(widths, start=1):
             worksheet.column_dimensions[
                 worksheet.cell(row=1, column=column).column_letter
             ].width = width
 
-        # Wrap long cell contents and align data rows to the top of each cell.
         for row in worksheet.iter_rows(min_row=2):
             for cell in row:
                 cell.alignment = Alignment(wrap_text=True, vertical="top")
 
-        # Keep the header row visible while scrolling down the worksheet.
         worksheet.freeze_panes = "A2"
 
     # Cleaner folder structure for test runs
