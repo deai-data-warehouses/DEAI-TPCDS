@@ -11,6 +11,13 @@ from constants import (
 )
 from utils import clean_sql_comments, get_table_names, parquet_table_is_complete
 
+def write_table_partitioned(dataframe, table_name, output_path):
+    if table_name == "catalog_sales":
+        dataframe.write.mode("overwrite").partitionBy("cs_sold_date_sk").parquet(str(output_path))
+    elif table_name == "inventory":
+        dataframe.write.mode("overwrite").partitionBy("inv_date_sk").parquet(str(output_path))
+    else:
+        dataframe.write.mode("overwrite").parquet(str(output_path))
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -111,6 +118,8 @@ def main() -> None:
                 sep="|",
                 schema=table_schema,
             )
+            # write_table_partitioned(dataframe, table_name, output_path)
+
             dataframe.write.mode("overwrite").parquet(str(output_path))
             if not parquet_table_is_complete(str(output_path)):
                 raise RuntimeError(f"Parquet output is incomplete for table {table_name}")
