@@ -10,8 +10,7 @@ def build_summary(
 ) -> dict:
     """Aggregate the per-statement records into a single run summary row."""
     successful_records = [r for r in query_records if r["status"] == "success"]
-    all_query_times = [r["elapsed_seconds"] for r in query_records]
-    successful_query_times = [r["elapsed_seconds"] for r in successful_records]
+    successful_query_times = [r["avg_seconds"] for r in successful_records]
 
     return {
         "run_id": run_id,
@@ -21,7 +20,6 @@ def build_summary(
         "parquet_dir": parquet_dir,
         "queries_dir": queries_dir,
         "run_elapsed_seconds": run_elapsed_seconds,
-        "total_query_seconds": sum(all_query_times),
         "successful_query_seconds": sum(successful_query_times),
         "average_statement_seconds": (
             sum(successful_query_times) / len(successful_query_times)

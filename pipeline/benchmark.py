@@ -178,9 +178,7 @@ def main() -> None:
                 avg_time = sum(run_times) / len(run_times)
                 min_time = min(run_times)
                 max_time = max(run_times)
-                final_elapsed = avg_time
             else:
-                final_elapsed = elapsed
                 min_time, max_time, avg_time = None, None, None
 
             query_number = int(query_file.removeprefix("query").removesuffix(".sql"))
@@ -191,7 +189,6 @@ def main() -> None:
                 "query_id": query_number,
                 "query_file": query_file,
                 "statement_part": i,
-                "elapsed_seconds": final_elapsed,
                 "min_seconds": min_time,
                 "max_seconds": max_time,
                 "avg_seconds": avg_time,
@@ -199,7 +196,6 @@ def main() -> None:
                 "row_count": rows,
                 "error": error[:32767],
                 "scale_factor": args.scale_factor,
-                "sql": sql[:32767],
             })
 
             # Force a full JVM garbage collection between statements (outside
