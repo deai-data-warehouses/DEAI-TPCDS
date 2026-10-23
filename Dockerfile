@@ -22,11 +22,15 @@ WORKDIR /app
 
 RUN python -m pip install --no-cache-dir \
     dotenv==0.9.9 \
+    jinja2==3.1.6 \
     openpyxl==3.1.5 \
+    pydantic==2.14.1 \
     pyspark==4.2.0
 
 COPY pipeline ./pipeline
 
 COPY scripts ./scripts
+
+COPY config ./config
 
 CMD ["python", "pipeline/main.py"]
