@@ -126,6 +126,7 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --limit 20
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --end 20
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --limit 3
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --query 5 --runs 10
 ```
 
 | Parameter | Description |
@@ -135,6 +136,7 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 | `--query N` | Run only the file `queryN.sql`. Cannot be combined with `--limit`, `--start` or `--end`. |
 | `--start N` | Run the queries from `queryN.sql` onwards (inclusive). |
 | `--end N` | Run the queries up to `queryN.sql` (inclusive). |
+| `--runs N` | Execute each query `N` times (default `5`). Timings are reported as min/max/avg over the runs. Recorded as `runs_per_query` in the run summary. |
 
 Benchmarking reads existing Parquet
 and query files; it never regenerates data, queries, or Parquet.
