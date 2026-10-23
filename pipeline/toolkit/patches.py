@@ -1,10 +1,5 @@
-import argparse
 import re
-import shutil
-import subprocess
-from datetime import datetime
 from pathlib import Path
-from time import perf_counter
 
 
 def patch_function_signature(source_file: Path, name: str, old_args: str, new_args: str) -> None:

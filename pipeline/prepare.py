@@ -16,8 +16,8 @@ from constants import (
     STAGED_TOOLS_DIR,
     get_scenario_paths,
 )
-from toolkit.patches import *
-from utils import get_table_names
+from toolkit.patches import patch_netezza_template, patch_sources
+from toolkit.schema import get_table_names
 
 
 def _stage_tool_source(source_dir: Path) -> None:

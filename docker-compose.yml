@@ -17,7 +17,6 @@ services:
         trap 'chown -R ${HOST_UID:-1000}:${HOST_GID:-1000} /app/scenarios' EXIT;
         "$$@"
       - sh
-    command: ["python", "pipeline/main.py"]
     environment:
       TPCDS_TOOL_DIR: /input/tpcds-tool
       SCENARIOS_DIR: /app/scenarios

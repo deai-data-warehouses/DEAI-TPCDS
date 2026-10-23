@@ -4,12 +4,10 @@ from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 
-from constants import (
-    SQL_SCHEMA_PATH,
-    create_spark_session,
-    get_scenario_paths,
-)
-from utils import clean_sql_comments, get_table_names, parquet_table_is_complete
+from constants import SQL_SCHEMA_PATH, get_scenario_paths
+from spark_session import create_spark_session
+from toolkit.queries import clean_sql_comments
+from toolkit.schema import get_table_names, parquet_table_is_complete
 
 
 def main() -> None:

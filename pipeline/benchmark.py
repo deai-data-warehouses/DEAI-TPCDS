@@ -10,19 +10,10 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
-from constants import (
-    RUNS_DIR,
-    SQL_SCHEMA_PATH,
-    create_spark_session,
-    get_scenario_paths,
-)
-from utils import (
-    get_table_names,
-    normalize_sql_for_spark,
-    parquet_table_is_complete,
-    register_tables_in_spark,
-    sort_query_files,
-)
+from constants import RUNS_DIR, SQL_SCHEMA_PATH, get_scenario_paths
+from spark_session import create_spark_session, register_tables_in_spark
+from toolkit.queries import normalize_sql_for_spark, sort_query_files
+from toolkit.schema import get_table_names, parquet_table_is_complete
 
 
 def _select_query_files(parser: argparse.ArgumentParser, args: argparse.Namespace) -> list[str]:
