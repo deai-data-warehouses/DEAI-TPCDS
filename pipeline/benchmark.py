@@ -46,6 +46,9 @@ def _parse_args() -> argparse.Namespace:
         default="original",
         help="read queries from queries/<QUERIES>/queries_<N>GB (default: original)",
     )
+    parser.add_argument(
+        "--broadcast-threshold", type=int, default=10, help="Broadcast join threshold in MB (use -1 to disable)" 
+    )
     args = parser.parse_args()
 
     if args.scale_factor <= 0:
@@ -111,6 +114,11 @@ def main() -> None:
 
     spark = create_spark_session("TPCDS_Benchmark")
     spark.sparkContext.setLogLevel("ERROR")
+
+    # --- Broadcast Threshold ---
+    threshold_bytes = args.broadcast_threshold * 1024 * 1024 if args.broadcast_threshold > 0 else -1
+    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", str(threshold_bytes))
+    print(f"🔧 Broadcast Threshold set to: {args.broadcast_threshold} MB")
 
     run_start = time.perf_counter()
     query_records = []
