@@ -29,4 +29,6 @@ COPY pipeline ./pipeline
 
 COPY scripts ./scripts
 
-CMD ["python", "pipeline/main.py"]
+# No default stage: each one is run explicitly, e.g.
+# `docker compose run --rm pipeline python pipeline/prepare.py --scale-factor 1`
+CMD ["echo", "Run a stage: python pipeline/{prepare,convert,benchmark}.py --scale-factor N (see README)"]

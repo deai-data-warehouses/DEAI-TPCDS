@@ -126,6 +126,8 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --limit 20
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --end 20
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --limit 3
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --query 5 --runs 10
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --query 5 --queries changed
 ```
 
 | Parameter | Description |
@@ -135,11 +137,34 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 | `--query N` | Run only the file `queryN.sql`. Cannot be combined with `--limit`, `--start` or `--end`. |
 | `--start N` | Run the queries from `queryN.sql` onwards (inclusive). |
 | `--end N` | Run the queries up to `queryN.sql` (inclusive). |
+| `--runs N` | Execute each query `N` times (default `5`). Timings are reported as min/max/avg over the runs. Recorded as `runs_per_query` in the run summary. |
+| `--queries V` | Which query set to read: `original` (default, `queries/original/queries_<N>GB/`) or `changed` (`queries/changed/queries_<N>GB/`, only the modified queries). Recorded as `query_version` in each row; `changed` runs get a `_changed` suffix in the run folder name. |
 
-Benchmarking reads existing Parquet
-and query files; it never regenerates data, queries, or Parquet.
-Each invocation creates a unique folder under `SCENARIOS_DIR/runs/`, organized
-by UTC date and run ID, and saves one Excel workbook named
+Benchmarking reads existing Parquet from `SCENARIOS_DIR` and the
+version-controlled queries in `queries/original/queries_<N>GB/` (not the
+`SCENARIOS_DIR/queries_<N>GB/` output of the prepare stage, which stays as the
+untouched dsqgen reference). Edits to those query files are tracked by git and
+picked up on the next run; in Docker the folder is bind-mounted, so no rebuild
+is needed. `queries/changed/queries_<N>GB/` holds modified versions of individual
+queries and is used with `--queries changed`. It never regenerates data, queries, or Parquet.
+Each invocation creates a folder under `SCENARIOS_DIR/runs/<UTC date>/` named
+`<HHMMSS>_<scale>GB_<queries>`, where `<queries>` describes the selection
+arguments:
+
+| Arguments | Folder name |
+|---|---|
+| *(none)* | `145347_1GB_full` |
+| `--query 5` | `145347_1GB_query5` |
+| `--start 10` | `145347_1GB_from10` |
+| `--end 20` | `145347_1GB_to20` |
+| `--start 10 --end 20` | `145347_1GB_query10-20` |
+| `--limit 20` | `145347_1GB_first20` |
+| `--start 10 --limit 3` | `145347_1GB_from10_first3` |
+| `--end 20 --limit 3` | `145347_1GB_to20_first3` |
+| `--start 10 --end 20 --limit 3` | `145347_1GB_query10-20_first3` |
+
+The unique run ID is still recorded in the `run_id` column of the reports.
+The folder holds one Excel workbook named
 `benchmark_report.xlsx` there. The workbook has a `Query Runs` sheet with one
 row per executed SQL statement and a `Run Summary` sheet with one row for the
 whole invocation. The same folder also contains `query_runs.csv` and
@@ -165,7 +190,7 @@ scenarios/
 │       └── _SUCCESS
 └── runs
     └── 2026-10-14
-        └── 145347_7b3b9cb7-562d-4081-9f35-2417f32ca6d8
+        └── 145347_1GB_full
             ├── benchmark_report.xlsx
             ├── query_runs.csv
             └── run_summary.csv

@@ -13,3 +13,7 @@ scenarios
 spark-warehouse/
 
 notebooks/
+
+CLAUDE.md
+
+queries/**/.complete
