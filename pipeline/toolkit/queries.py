@@ -3,7 +3,6 @@ import re
 import os
 
 from pathlib import Path
-from constants import get_scenario_paths
 
 def sort_query_files(query_files):
     """
@@ -53,12 +52,10 @@ def clean_sql_comments(sql_str: str) -> str:
     )
 
 
-def select_query_files(args: argparse.Namespace) -> list[str]:
-    query_dir = Path(get_scenario_paths(args.scale_factor)[2])
+def select_query_files(args: argparse.Namespace, query_dir: str) -> list[str]:
+    query_dir = Path(query_dir)
     if not query_dir.is_dir():
-        raise FileNotFoundError(
-            f"Query directory not found at {query_dir}; run pipeline/prepare.py first."
-        )
+        raise FileNotFoundError(f"Query directory not found at {query_dir}")
     query_files = sort_query_files(os.listdir(query_dir))
     if args.query is not None:
         query_file = f"query{args.query}.sql"

@@ -20,6 +20,7 @@ services:
     environment:
       TPCDS_TOOL_DIR: /input/tpcds-tool
       SCENARIOS_DIR: /app/scenarios
+      QUERIES_DIR: /app/queries
       # Spark UI binds to SPARK_LOCAL_IP; 127.0.0.1 (set in the Dockerfile)
       # is unreachable through the published port
       SPARK_LOCAL_IP: 0.0.0.0
@@ -29,6 +30,14 @@ services:
       - type: bind
         source: ${TPCDS_TOOL_DIR}
         target: /input/tpcds-tool
+        read_only: true
+        bind:
+          create_host_path: false
+      # Version-controlled queries read by the benchmark; mounted (not copied
+      # into the image) so query edits apply without rebuilding
+      - type: bind
+        source: ./queries
+        target: /app/queries
         read_only: true
         bind:
           create_host_path: false

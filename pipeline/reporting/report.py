@@ -20,6 +20,7 @@ COLUMN_WIDTHS = {
     "started_at": 28,
     "query_id": 10,
     "query_file": 18,
+    "query_version": 14,
     "statement_part": 15,
     "min_seconds": 14,
     "max_seconds": 14,

@@ -6,7 +6,13 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from constants import RUNS_DIR, SQL_SCHEMA_PATH, get_scenario_paths
+from constants import (
+    QUERY_VERSIONS,
+    RUNS_DIR,
+    SQL_SCHEMA_PATH,
+    get_benchmark_queries_dir,
+    get_scenario_paths,
+)
 from reporting.report import write_reports
 from reporting.summary import build_summary
 from spark_session import create_spark_session, register_tables_in_spark
@@ -34,6 +40,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runs", type=int, default=5, help="times each query is executed to average its timing (default: 5)"
     )
+    parser.add_argument(
+        "--queries",
+        choices=QUERY_VERSIONS,
+        default="original",
+        help="read queries from queries/<QUERIES>/queries_<N>GB (default: original)",
+    )
     args = parser.parse_args()
 
     if args.scale_factor <= 0:
@@ -49,10 +61,10 @@ def _parse_args() -> argparse.Namespace:
 
 def _query_selection_label(args: argparse.Namespace) -> str:
     """Describe the query selection arguments, e.g. "full", "query5", "from10_first3"."""
-    if args.query is not None:
-        return f"query{args.query}"
     parts = []
-    if args.start is not None and args.end is not None:
+    if args.query is not None:
+        parts.append(f"query{args.query}")
+    elif args.start is not None and args.end is not None:
         parts.append(f"query{args.start}-{args.end}")
     elif args.start is not None:
         parts.append(f"from{args.start}")
@@ -60,13 +72,18 @@ def _query_selection_label(args: argparse.Namespace) -> str:
         parts.append(f"to{args.end}")
     if args.limit is not None:
         parts.append(f"first{args.limit}")
-    return "_".join(parts) or "full"
+    label = "_".join(parts) or "full"
+    # Original queries keep the plain label; other versions are suffixed
+    if args.queries != "original":
+        label += f"_{args.queries}"
+    return label
 
 
 def main() -> None:
     args = _parse_args()
-    query_files = select_query_files(args)
-    _ , parquet_dir, queries_dir = get_scenario_paths(args.scale_factor)
+    _, parquet_dir, _ = get_scenario_paths(args.scale_factor)
+    queries_dir = get_benchmark_queries_dir(args.scale_factor, args.queries)
+    query_files = select_query_files(args, queries_dir)
 
     # 1. Check that the TPC-DS schema is present and that all Parquet tables are
     #    complete
@@ -151,6 +168,7 @@ def main() -> None:
                 "started_at": started_at,
                 "query_id": query_number,
                 "query_file": query_file,
+                "query_version": args.queries,
                 "statement_part": i,
                 "min_seconds": min_time,
                 "max_seconds": max_time,
@@ -186,7 +204,7 @@ def main() -> None:
     )
     write_reports(run_directory, query_records, summary)
 
-    input(f"⚠️ Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
+    input(f"\n⚠️ Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
     try:
         spark.sparkContext.cancelAllJobs()
         spark.stop()

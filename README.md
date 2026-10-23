@@ -127,6 +127,7 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --end 20
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --limit 3
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --query 5 --runs 10
+docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --query 5 --queries changed
 ```
 
 | Parameter | Description |
@@ -137,9 +138,15 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 | `--start N` | Run the queries from `queryN.sql` onwards (inclusive). |
 | `--end N` | Run the queries up to `queryN.sql` (inclusive). |
 | `--runs N` | Execute each query `N` times (default `5`). Timings are reported as min/max/avg over the runs. Recorded as `runs_per_query` in the run summary. |
+| `--queries V` | Which query set to read: `original` (default, `queries/original/queries_<N>GB/`) or `changed` (`queries/changed/queries_<N>GB/`, only the modified queries). Recorded as `query_version` in each row; `changed` runs get a `_changed` suffix in the run folder name. |
 
-Benchmarking reads existing Parquet
-and query files; it never regenerates data, queries, or Parquet.
+Benchmarking reads existing Parquet from `SCENARIOS_DIR` and the
+version-controlled queries in `queries/original/queries_<N>GB/` (not the
+`SCENARIOS_DIR/queries_<N>GB/` output of the prepare stage, which stays as the
+untouched dsqgen reference). Edits to those query files are tracked by git and
+picked up on the next run; in Docker the folder is bind-mounted, so no rebuild
+is needed. `queries/changed/queries_<N>GB/` holds modified versions of individual
+queries and is used with `--queries changed`. It never regenerates data, queries, or Parquet.
 Each invocation creates a folder under `SCENARIOS_DIR/runs/<UTC date>/` named
 `<HHMMSS>_<scale>GB_<queries>`, where `<queries>` describes the selection
 arguments:

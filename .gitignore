@@ -14,4 +14,6 @@ spark-warehouse/
 
 notebooks/
 
-CLAUDE.mdqueries/**/.complete
+CLAUDE.md
+
+queries/**/.complete
