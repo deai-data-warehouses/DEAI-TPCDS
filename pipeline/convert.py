@@ -7,7 +7,11 @@ from time import perf_counter
 from constants import SQL_SCHEMA_PATH, get_scenario_paths
 from spark_session import create_spark_session
 from toolkit.queries import clean_sql_comments
-from toolkit.schema import get_table_names, parquet_table_is_complete
+from toolkit.schema import (
+    get_table_names,
+    incomplete_parquet_tables,
+    parquet_table_is_complete,
+)
 
 
 def main() -> None:
@@ -34,10 +38,7 @@ def main() -> None:
     parquet_dir = Path(parquet_dir_str)
 
     schema_path = Path(SQL_SCHEMA_PATH)
-    if not schema_path.is_file():
-        raise FileNotFoundError(
-            f"TPC-DS schema not found at {schema_path}; run pipeline/prepare.py first."
-        )
+    table_names = get_table_names(schema_path)
     if not data_dir.is_dir():
         raise FileNotFoundError(
             f"Raw data directory not found at {data_dir}; run pipeline/prepare.py first."
@@ -53,7 +54,6 @@ def main() -> None:
             if table_name != "dbgen_version":
                 table_statements.append((table_name, statement))
 
-    table_names = get_table_names(schema_sql)
     if not table_names:
         raise RuntimeError(f"No TPC-DS tables found in {schema_path}")
     missing_data = [
@@ -69,12 +69,7 @@ def main() -> None:
             + ". Run pipeline/prepare.py to generate them."
         )
 
-    completed = [
-        name
-        for name in table_names
-        if parquet_table_is_complete(str(parquet_dir / name))
-    ]
-    if not args.force and len(completed) == len(table_names):
+    if not args.force and not incomplete_parquet_tables(parquet_dir, table_names):
         print(f"All Parquet tables are already complete in {parquet_dir}; nothing to do.")
         return
 
@@ -117,11 +112,7 @@ def main() -> None:
     finally:
         spark.stop()
 
-    incomplete = [
-        name
-        for name in table_names
-        if not parquet_table_is_complete(str(parquet_dir / name))
-    ]
+    incomplete = incomplete_parquet_tables(parquet_dir, table_names)
     if incomplete:
         raise RuntimeError(f"Conversion left incomplete Parquet tables: {incomplete}")
     print(f"All tables have been converted to Parquet in {parquet_dir}.")

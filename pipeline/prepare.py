@@ -135,8 +135,7 @@ def main() -> None:
     patch_sources(Path(STAGED_TOOLS_DIR))
     patch_netezza_template(Path(QUERY_TEMPLATES_DIR) / "netezza.tpl")
 
-    schema_sql = Path(SQL_SCHEMA_PATH).read_text()
-    table_names = get_table_names(schema_sql)
+    table_names = get_table_names(Path(SQL_SCHEMA_PATH))
     if not table_names:
         raise RuntimeError(f"No TPC-DS tables found in {SQL_SCHEMA_PATH}")
     query_names = _expected_query_names()

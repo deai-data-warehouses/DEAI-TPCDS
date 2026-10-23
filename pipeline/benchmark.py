@@ -13,15 +13,38 @@ from openpyxl.styles import Alignment, Font
 from constants import RUNS_DIR, SQL_SCHEMA_PATH, get_scenario_paths
 from spark_session import create_spark_session, register_tables_in_spark
 from toolkit.queries import normalize_sql_for_spark, sort_query_files
-from toolkit.schema import get_table_names, parquet_table_is_complete
+from toolkit.schema import get_table_names, incomplete_parquet_tables
 
 
-def _select_query_files(parser: argparse.ArgumentParser, args: argparse.Namespace) -> list[str]:
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the TPC-DS benchmark queries.")
+    parser.add_argument(
+        "--limit", type=int, help="run only the first N queries (in query order)"
+    )
+    parser.add_argument(
+        "--query", type=int, help="run only the file query<QUERY>.sql (e.g. --query 5)"
+    )
+    parser.add_argument(
+        "--start", type=int, help="run queries from query<START> onwards (inclusive)"
+    )
+    parser.add_argument(
+        "--end", type=int, help="run queries up to query<END> (inclusive)"
+    )
+    parser.add_argument(
+        "--scale-factor", type=int, required=True, help="TPC-DS data scale factor used for this run"
+    )
+    args = parser.parse_args()
+
+    if args.scale_factor <= 0:
+        parser.error("--scale-factor must be a positive integer")
     if args.query is not None and any(
         value is not None for value in (args.limit, args.start, args.end)
     ):
         parser.error("--query cannot be combined with --limit, --start or --end")
+    return args
 
+
+def _select_query_files(args: argparse.Namespace) -> list[str]:
     query_dir = Path(get_scenario_paths(args.scale_factor)[2])
     if not query_dir.is_dir():
         raise FileNotFoundError(
@@ -74,41 +97,15 @@ def _query_selection_label(args: argparse.Namespace) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the TPC-DS benchmark queries.")
-    parser.add_argument(
-        "--limit", type=int, help="run only the first N queries (in query order)"
-    )
-    parser.add_argument(
-        "--query", type=int, help="run only the file query<QUERY>.sql (e.g. --query 5)"
-    )
-    parser.add_argument(
-        "--start", type=int, help="run queries from query<START> onwards (inclusive)"
-    )
-    parser.add_argument(
-        "--end", type=int, help="run queries up to query<END> (inclusive)"
-    )
-    parser.add_argument(
-        "--scale-factor", type=int, required=True, help="TPC-DS data scale factor used for this run"
-    )
-    args = parser.parse_args()
-
-    if args.scale_factor <= 0:
-        parser.error("--scale-factor must be a positive integer")
-
-    query_files = _select_query_files(parser, args)
+    args = _parse_args()
+    query_files = _select_query_files(args)
     _ , parquet_dir, queries_dir = get_scenario_paths(args.scale_factor)
 
+    # 1. Check that the TPC-DS schema is present and that all Parquet tables are
+    #    complete
     schema_path = Path(SQL_SCHEMA_PATH)
-    if not schema_path.is_file():
-        raise FileNotFoundError(
-            f"TPC-DS schema not found at {schema_path}; run pipeline/prepare.py first."
-        )
-    table_names = get_table_names(schema_path.read_text())
-    missing_tables = [
-        name
-        for name in table_names
-        if not parquet_table_is_complete(os.path.join(parquet_dir, name))
-    ]
+    table_names = get_table_names(schema_path)
+    missing_tables = incomplete_parquet_tables(parquet_dir, table_names)
     if missing_tables:
         raise FileNotFoundError(
             f"Missing or incomplete Parquet tables in {parquet_dir}: "
@@ -129,31 +126,6 @@ def main() -> None:
     )
     os.makedirs(run_directory, exist_ok=True)
     report_path = os.path.join(run_directory, "benchmark_report.xlsx")
-
-    try:
-        repository_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        # Save the short commit hash, control code version
-        code_version = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            check=True,
-            capture_output=True,
-            text=True,
-            cwd=repository_root,
-        ).stdout.strip()
-        # Record in the reporting if the run used coded different from the current commit
-        # If a file has uncommited edits it will be True
-        working_tree_dirty = bool(
-            subprocess.run(
-                ["git", "status", "--porcelain", "--untracked-files=no"],
-                check=True,
-                capture_output=True,
-                text=True,
-                cwd=repository_root,
-            ).stdout.strip()
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        code_version = "unknown"
-        working_tree_dirty = None
 
     spark = create_spark_session("TPCDS_Benchmark")
     # Measure durations
@@ -177,8 +149,8 @@ def main() -> None:
 
     query_headers = [
         "run_id", "started_at", "query_id", "query_file", "statement_part", "label",
-        "elapsed_seconds", "min_seconds", "max_seconds", "avg_seconds", 
-        "status", "row_count", "error", "scale_factor", "code_version", "working_tree_dirty", "sql",
+        "elapsed_seconds", "min_seconds", "max_seconds", "avg_seconds",
+        "status", "row_count", "error", "scale_factor", "sql",
     ]
     query_sheet.append(query_headers)
 
@@ -242,8 +214,6 @@ def main() -> None:
                 "row_count": rows,
                 "error": error[:32767],
                 "scale_factor": args.scale_factor,
-                "code_version": code_version,
-                "working_tree_dirty": working_tree_dirty,
                 "sql": sql[:32767],
             })
 
@@ -273,8 +243,6 @@ def main() -> None:
         "scale_factor": args.scale_factor,
         "parquet_dir": parquet_dir,
         "queries_dir": queries_dir,
-        "code_version": code_version,
-        "working_tree_dirty": working_tree_dirty,
         "run_elapsed_seconds": run_elapsed_seconds,
         "total_query_seconds": sum(all_query_times),
         "successful_query_seconds": sum(successful_query_times),
