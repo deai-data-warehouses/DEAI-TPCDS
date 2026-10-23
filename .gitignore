@@ -13,3 +13,5 @@ scenarios
 spark-warehouse/
 
 notebooks/
+
+CLAUDE.md

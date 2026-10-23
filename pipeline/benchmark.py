@@ -66,6 +66,22 @@ def _select_query_files(parser: argparse.ArgumentParser, args: argparse.Namespac
     return query_files
 
 
+def _query_selection_label(args: argparse.Namespace) -> str:
+    """Describe the query selection arguments, e.g. "full", "query5", "from10_first3"."""
+    if args.query is not None:
+        return f"query{args.query}"
+    parts = []
+    if args.start is not None and args.end is not None:
+        parts.append(f"query{args.start}-{args.end}")
+    elif args.start is not None:
+        parts.append(f"from{args.start}")
+    elif args.end is not None:
+        parts.append(f"to{args.end}")
+    if args.limit is not None:
+        parts.append(f"first{args.limit}")
+    return "_".join(parts) or "full"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the TPC-DS benchmark queries.")
     parser.add_argument(
@@ -113,10 +129,12 @@ def main() -> None:
     run_id = str(uuid.uuid4())
     run_started_at = datetime.now(timezone.utc)
     started_at = run_started_at.isoformat()
+    # Folder name: <HHMMSS>_<scale>GB_<query selection>, e.g. 145347_1GB_full
     run_directory = os.path.join(
         RUNS_DIR,
         run_started_at.strftime("%Y-%m-%d"),
-        f"{run_started_at.strftime('%H%M%S')}_{run_id}",
+        f"{run_started_at.strftime('%H%M%S')}_{args.scale_factor:g}GB_"
+        f"{_query_selection_label(args)}",
     )
     os.makedirs(run_directory, exist_ok=True)
     report_path = os.path.join(run_directory, "benchmark_report.xlsx")

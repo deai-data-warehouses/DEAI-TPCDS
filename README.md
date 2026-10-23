@@ -138,8 +138,24 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 
 Benchmarking reads existing Parquet
 and query files; it never regenerates data, queries, or Parquet.
-Each invocation creates a unique folder under `SCENARIOS_DIR/runs/`, organized
-by UTC date and run ID, and saves one Excel workbook named
+Each invocation creates a folder under `SCENARIOS_DIR/runs/<UTC date>/` named
+`<HHMMSS>_<scale>GB_<queries>`, where `<queries>` describes the selection
+arguments:
+
+| Arguments | Folder name |
+|---|---|
+| *(none)* | `145347_1GB_full` |
+| `--query 5` | `145347_1GB_query5` |
+| `--start 10` | `145347_1GB_from10` |
+| `--end 20` | `145347_1GB_to20` |
+| `--start 10 --end 20` | `145347_1GB_query10-20` |
+| `--limit 20` | `145347_1GB_first20` |
+| `--start 10 --limit 3` | `145347_1GB_from10_first3` |
+| `--end 20 --limit 3` | `145347_1GB_to20_first3` |
+| `--start 10 --end 20 --limit 3` | `145347_1GB_query10-20_first3` |
+
+The unique run ID is still recorded in the `run_id` column of the reports.
+The folder holds one Excel workbook named
 `benchmark_report.xlsx` there. The workbook has a `Query Runs` sheet with one
 row per executed SQL statement and a `Run Summary` sheet with one row for the
 whole invocation. The same folder also contains `query_runs.csv` and
@@ -165,7 +181,7 @@ scenarios/
 │       └── _SUCCESS
 └── runs
     └── 2026-10-14
-        └── 145347_7b3b9cb7-562d-4081-9f35-2417f32ca6d8
+        └── 145347_1GB_full
             ├── benchmark_report.xlsx
             ├── query_runs.csv
             └── run_summary.csv
