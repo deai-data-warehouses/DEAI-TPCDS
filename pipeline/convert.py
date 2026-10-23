@@ -14,7 +14,7 @@ from toolkit.schema import (
 )
 
 
-def main() -> None:
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Convert TPC-DS raw data files to Parquet."
     )
@@ -32,7 +32,11 @@ def main() -> None:
     args = parser.parse_args()
     if args.scale_factor <= 0:
         parser.error("--scale-factor must be a positive integer")
+    return args
 
+
+def main() -> None:
+    args = _parse_args()
     data_dir_str, parquet_dir_str, _ = get_scenario_paths(args.scale_factor)
     data_dir = Path(data_dir_str)
     parquet_dir = Path(parquet_dir_str)
@@ -80,8 +84,8 @@ def main() -> None:
         "Generate parquet files started."
     )
     spark = create_spark_session("TPCDS_Parquet_Conversion")
+    spark.sparkContext.setLogLevel("ERROR")
     try:
-        spark.sparkContext.setLogLevel("ERROR")
         for table_name, statement in table_statements:
             output_path = parquet_dir / table_name
             if not args.force and parquet_table_is_complete(str(output_path)):

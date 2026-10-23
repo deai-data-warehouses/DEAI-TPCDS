@@ -10,7 +10,7 @@ from constants import RUNS_DIR, SQL_SCHEMA_PATH, get_scenario_paths
 from reporting.report import write_reports
 from reporting.summary import build_summary
 from spark_session import create_spark_session, register_tables_in_spark
-from toolkit.queries import normalize_sql_for_spark, sort_query_files
+from toolkit.queries import normalize_sql_for_spark, select_query_files
 from toolkit.schema import get_table_names, incomplete_parquet_tables
 
 
@@ -47,42 +47,6 @@ def _parse_args() -> argparse.Namespace:
     return args
 
 
-def _select_query_files(args: argparse.Namespace) -> list[str]:
-    query_dir = Path(get_scenario_paths(args.scale_factor)[2])
-    if not query_dir.is_dir():
-        raise FileNotFoundError(
-            f"Query directory not found at {query_dir}; run pipeline/prepare.py first."
-        )
-    query_files = sort_query_files(os.listdir(query_dir))
-    if args.query is not None:
-        query_file = f"query{args.query}.sql"
-        if query_file not in query_files:
-            raise FileNotFoundError(f"{query_file} not found in {query_dir}")
-        return [query_file]
-
-    def query_number(filename: str) -> int:
-        return int(filename.removeprefix("query").removesuffix(".sql"))
-
-    if args.start is not None:
-        query_files = [name for name in query_files if query_number(name) >= args.start]
-    if args.end is not None:
-        query_files = [name for name in query_files if query_number(name) <= args.end]
-    if args.limit is not None:
-        query_files = query_files[:args.limit]
-    if not query_files:
-        raise SystemExit(f"No query files selected in {query_dir}")
-    empty_queries = [
-        name
-        for name in query_files
-        if not (query_dir / name).is_file() or (query_dir / name).stat().st_size == 0
-    ]
-    if empty_queries:
-        raise FileNotFoundError(
-            f"Missing or empty SQL query files in {query_dir}: {empty_queries}"
-        )
-    return query_files
-
-
 def _query_selection_label(args: argparse.Namespace) -> str:
     """Describe the query selection arguments, e.g. "full", "query5", "from10_first3"."""
     if args.query is not None:
@@ -101,7 +65,7 @@ def _query_selection_label(args: argparse.Namespace) -> str:
 
 def main() -> None:
     args = _parse_args()
-    query_files = _select_query_files(args)
+    query_files = select_query_files(args)
     _ , parquet_dir, queries_dir = get_scenario_paths(args.scale_factor)
 
     # 1. Check that the TPC-DS schema is present and that all Parquet tables are
@@ -115,7 +79,6 @@ def main() -> None:
             + ", ".join(missing_tables)
             + ". Run pipeline/convert.py first."
         )
-
 
     run_id = str(uuid.uuid4())
     run_started_at = datetime.now(timezone.utc)
@@ -223,7 +186,7 @@ def main() -> None:
     )
     write_reports(run_directory, query_records, summary)
 
-    input(f"Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
+    input(f"⚠️ Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
     try:
         spark.sparkContext.cancelAllJobs()
         spark.stop()
