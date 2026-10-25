@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 
+from config_loader import options
 from constants import SQL_SCHEMA_PATH, get_scenario_paths
 from spark_session import create_spark_session
 from toolkit.queries import clean_sql_comments
@@ -12,8 +13,6 @@ from toolkit.schema import (
     incomplete_parquet_tables,
     parquet_table_is_complete,
 )
-
-from config.config import options
 
 
 def write_table_partitioned(dataframe, table_name, output_path):
@@ -124,7 +123,7 @@ def main() -> None:
                 write_table_partitioned(dataframe, table_name, output_path)
             else:
                 dataframe.write.mode("overwrite").parquet(str(output_path))
-            
+
             if not parquet_table_is_complete(str(output_path)):
                 raise RuntimeError(f"Parquet output is incomplete for table {table_name}")
             print(f"Parquet export completed: {table_name}")

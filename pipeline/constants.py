@@ -14,8 +14,10 @@ QUERY_TEMPLATES_DIR = os.path.join(STAGED_TPCDS_DIR, "query_templates")
 SQL_SCHEMA_PATH = os.path.join(STAGED_TOOLS_DIR, "tpcds.sql")
 RUNS_DIR = os.path.join(SCENARIOS_DIR, "runs")
 
-# Version-controlled benchmark queries, at the repository root
+# Version-controlled benchmark queries and run configuration, at the repository
+# root
 QUERIES_DIR = str(Path(__file__).resolve().parent.parent / "queries")
+CONFIG_PATH = str(Path(__file__).resolve().parent.parent / "config" / "config.toml")
 # Subfolders of QUERIES_DIR the benchmark can read from
 QUERY_VERSIONS = ("original", "changed")
 

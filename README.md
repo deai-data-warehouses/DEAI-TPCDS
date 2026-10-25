@@ -141,7 +141,7 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 | `--queries V` | Which query set to read: `original` (default, `queries/original/queries_<N>GB/`) or `changed` (`queries/changed/queries_<N>GB/`, only the modified queries). Recorded as `query_version` in each row; `changed` runs get a `_changed` suffix in the run folder name. |
 
 Run options that are not command-line flags live in `config/config.toml`,
-validated by `config/config.py` (unknown keys are rejected):
+validated by `pipeline/config_loader.py` (unknown keys are rejected):
 
 | Option | Description |
 |---|---|

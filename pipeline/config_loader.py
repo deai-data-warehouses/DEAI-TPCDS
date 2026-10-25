@@ -3,7 +3,7 @@ import tomllib
 from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
-CONFIG_DIR = Path(__file__).parent
+from constants import CONFIG_PATH
 
 # 1. Based config shared by all config sections, to ensure consistency and immutability
 class StrictBaseModel(BaseModel):
@@ -28,7 +28,7 @@ class RunConfig(StrictBaseModel):
     spark: SparkConfig = SparkConfig()
 
 
-def load_config(path: str | Path = CONFIG_DIR / "config.toml") -> RunConfig:
+def load_config(path: str | Path = CONFIG_PATH) -> RunConfig:
     with open(path, "rb") as f:
         data = tomllib.load(f)
     return RunConfig(**data)
