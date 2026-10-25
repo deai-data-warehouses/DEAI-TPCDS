@@ -1,6 +1,7 @@
 import os
 
 from dotenv import load_dotenv
+from pathlib import Path
 
 load_dotenv()
 
@@ -13,7 +14,8 @@ QUERY_TEMPLATES_DIR = os.path.join(STAGED_TPCDS_DIR, "query_templates")
 SQL_SCHEMA_PATH = os.path.join(STAGED_TOOLS_DIR, "tpcds.sql")
 RUNS_DIR = os.path.join(SCENARIOS_DIR, "runs")
 
-QUERIES_DIR = os.getenv("QUERIES_DIR")
+# Version-controlled benchmark queries, at the repository root
+QUERIES_DIR = str(Path(__file__).resolve().parent.parent / "queries")
 # Subfolders of QUERIES_DIR the benchmark can read from
 QUERY_VERSIONS = ("original", "changed")
 
