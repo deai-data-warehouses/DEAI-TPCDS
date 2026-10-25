@@ -13,6 +13,16 @@ from toolkit.schema import (
     parquet_table_is_complete,
 )
 
+from config.config import options
+
+
+def write_table_partitioned(dataframe, table_name, output_path):
+    if table_name == "catalog_sales":
+        dataframe.write.mode("overwrite").partitionBy("cs_sold_date_sk").parquet(str(output_path))
+    elif table_name == "inventory":
+        dataframe.write.mode("overwrite").partitionBy("inv_date_sk").parquet(str(output_path))
+    else:
+        dataframe.write.mode("overwrite").parquet(str(output_path))
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -108,7 +118,13 @@ def main() -> None:
                 sep="|",
                 schema=table_schema,
             )
-            dataframe.write.mode("overwrite").parquet(str(output_path))
+
+            # Option to use partition
+            if options.spark.use_partition:
+                write_table_partitioned(dataframe, table_name, output_path)
+            else:
+                dataframe.write.mode("overwrite").parquet(str(output_path))
+            
             if not parquet_table_is_complete(str(output_path)):
                 raise RuntimeError(f"Parquet output is incomplete for table {table_name}")
             print(f"Parquet export completed: {table_name}")

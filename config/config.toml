@@ -1,0 +1,9 @@
+[general]
+runs_per_query = 2
+
+[spark]
+use_partition = false
+use_broadcast_joins_hints = false
+adaptative_enabled = true
+adaptative_coalesce_partitions = false
+adapatative_skew_join = false

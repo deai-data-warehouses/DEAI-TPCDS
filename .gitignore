@@ -3,6 +3,7 @@ __pycache__/
 
 .venv
 .env
+.vscode/
 
 DSGen-software-code-4.0.0/
 tpcds-tool/

@@ -126,7 +126,6 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --limit 20
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --end 20
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --start 10 --limit 3
-docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --query 5 --runs 10
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --query 5 --queries changed
 ```
 
@@ -137,8 +136,24 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 | `--query N` | Run only the file `queryN.sql`. Cannot be combined with `--limit`, `--start` or `--end`. |
 | `--start N` | Run the queries from `queryN.sql` onwards (inclusive). |
 | `--end N` | Run the queries up to `queryN.sql` (inclusive). |
-| `--runs N` | Execute each query `N` times (default `5`). Timings are reported as min/max/avg over the runs. Recorded as `runs_per_query` in the run summary. |
 | `--queries V` | Which query set to read: `original` (default, `queries/original/queries_<N>GB/`) or `changed` (`queries/changed/queries_<N>GB/`, only the modified queries). Recorded as `query_version` in each row; `changed` runs get a `_changed` suffix in the run folder name. |
+
+Run options that are not command-line flags live in `config/config.toml`,
+validated by `config/config.py` (unknown keys are rejected):
+
+| Option | Description |
+|---|---|
+| `[general] runs_per_query` | Execute each query this many times (default `5`). Timings are reported as min/max/avg over the runs. |
+| `[spark] adaptative_enabled` | Sets `spark.sql.adaptive.enabled`. |
+| `[spark] adaptative_coalesce_partitions` | Sets `spark.sql.adaptive.coalescePartitions.enabled`. |
+| `[spark] adapatative_skew_join` | Sets `spark.sql.adaptive.skewJoin.enabled`. |
+| `[spark] use_partition`, `use_broadcast_joins_hints` | Flags available to query templates (see below); not Spark settings. |
+
+Before running, each query file is rendered as a Jinja template with these
+options as `options`, so a query can adapt to the configuration, e.g.
+`{% if options.spark.use_broadcast_joins_hints %}/*+ BROADCAST(d) */{% endif %}`.
+Referencing an undefined option fails the run. In Docker, `config/` is copied
+into the image, so changes to `config.toml` need `docker compose build`.
 
 Benchmarking reads existing Parquet from `SCENARIOS_DIR` and the
 version-controlled queries in `queries/original/queries_<N>GB/` (not the
@@ -169,7 +184,9 @@ The folder holds one Excel workbook named
 row per executed SQL statement and a `Run Summary` sheet with one row for the
 whole invocation. The same folder also contains `query_runs.csv` and
 `run_summary.csv`, exported from those respective sheets for analysis in a
-notebook or other tools.
+notebook or other tools. Both outputs include the run configuration from
+`config.toml` (`runs_per_query` and the partitioning, broadcast-hint, and
+adaptive query execution options).
 
 ## Generated layout
 

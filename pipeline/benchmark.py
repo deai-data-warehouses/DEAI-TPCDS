@@ -1,10 +1,13 @@
 import argparse
 import os
+import sys
 import time
 import uuid
 
 from datetime import datetime, timezone
+from jinja2 import StrictUndefined, Template
 from pathlib import Path
+from pyspark.sql import SparkSession
 
 from constants import (
     QUERY_VERSIONS,
@@ -18,6 +21,47 @@ from reporting.summary import build_summary
 from spark_session import create_spark_session, register_tables_in_spark
 from toolkit.queries import normalize_sql_for_spark, select_query_files
 from toolkit.schema import get_table_names, incomplete_parquet_tables
+
+
+# Make the repository-root config package importable when run as a script. This
+# is necessary to be able to import the config module when running this file
+# directly, e.g. `python pipeline/benchmark.py ...`.
+project_root = str(Path(__file__).resolve().parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from config.config import options
+
+
+def set_session_configurations(
+    spark_session: SparkSession,
+) -> dict[str, int | bool]:
+    """
+    Apply run options to Spark and return them for inclusion in run metadata.
+    """
+    run_configuration: dict[str, int | bool] = {
+        "runs_per_query": options.general.runs_per_query,
+        "use_partition": options.spark.use_partition,
+        "use_broadcast_joins_hints": options.spark.use_broadcast_joins_hints,
+        "spark_adaptive_enabled": options.spark.adaptative_enabled,
+        "spark_adaptive_coalesce_partitions_enabled": (
+            options.spark.adaptative_coalesce_partitions
+        ),
+        "spark_adaptive_skew_join_enabled": options.spark.adapatative_skew_join,
+    }
+    spark_settings = {
+        "spark.sql.adaptive.enabled": "spark_adaptive_enabled",
+        "spark.sql.adaptive.coalescePartitions.enabled": (
+            "spark_adaptive_coalesce_partitions_enabled"
+        ),
+        "spark.sql.adaptive.skewJoin.enabled": "spark_adaptive_skew_join_enabled",
+    }
+
+    for spark_key, configuration_key in spark_settings.items():
+        spark_session.conf.set(
+            spark_key, str(run_configuration[configuration_key]).lower()
+        )
+    return run_configuration
 
 
 def _parse_args() -> argparse.Namespace:
@@ -35,10 +79,10 @@ def _parse_args() -> argparse.Namespace:
         "--end", type=int, help="run queries up to query<END> (inclusive)"
     )
     parser.add_argument(
-        "--scale-factor", type=int, required=True, help="TPC-DS data scale factor used for this run"
-    )
-    parser.add_argument(
-        "--runs", type=int, default=5, help="times each query is executed to average its timing (default: 5)"
+        "--scale-factor",
+        type=int,
+        required=True,
+        help="TPC-DS data scale factor used for this run",
     )
     parser.add_argument(
         "--queries",
@@ -53,8 +97,6 @@ def _parse_args() -> argparse.Namespace:
 
     if args.scale_factor <= 0:
         parser.error("--scale-factor must be a positive integer")
-    if args.runs <= 0:
-        parser.error("--runs must be a positive integer")
     if args.query is not None and any(
         value is not None for value in (args.limit, args.start, args.end)
     ):
@@ -112,6 +154,7 @@ def main() -> None:
     )
     os.makedirs(run_directory, exist_ok=True)
 
+    # Create session and configurations
     spark = create_spark_session("TPCDS_Benchmark")
     spark.sparkContext.setLogLevel("ERROR")
 
@@ -119,6 +162,8 @@ def main() -> None:
     threshold_bytes = args.broadcast_threshold * 1024 * 1024 if args.broadcast_threshold > 0 else -1
     spark.conf.set("spark.sql.autoBroadcastJoinThreshold", str(threshold_bytes))
     print(f"🔧 Broadcast Threshold set to: {args.broadcast_threshold} MB")
+
+    run_configuration = set_session_configurations(spark)
 
     run_start = time.perf_counter()
     query_records = []
@@ -133,21 +178,32 @@ def main() -> None:
 
     for query_file in query_files:
         query_path = os.path.join(queries_dir, query_file)
-        with open(query_path, "r") as query_stream:
-            raw_sql = normalize_sql_for_spark(query_stream.read())
+        with open(query_path, "r", encoding="utf-8") as query_stream:
+            sql_template = query_stream.read()
+            rendered_sql = Template(sql_template, undefined=StrictUndefined).render(
+                options=options
+            )
+            # Normalize the SQL for Spark (remove comments, etc.)
+            raw_sql = normalize_sql_for_spark(rendered_sql)
 
         statements = [stmt.strip() for stmt in raw_sql.split(";") if stmt.strip()]
         if len(statements) > 1:
-            print(f"{query_file} contains {len(statements)} queries, executing all of them")
+            print(
+                f"{query_file} contains {len(statements)} queries, executing all of them"
+            )
 
         for i, sql in enumerate(statements, start=1):
-            label = f"{query_file} (part {i}/{len(statements)})" if len(statements) > 1 else query_file
-            print(f"Executing {label} ({args.runs} runs)...")
+            label = (
+                f"{query_file} (part {i}/{len(statements)})"
+                if len(statements) > 1
+                else query_file
+            )
+            print(f"Executing {label} ({options.general.runs_per_query} runs)...")
 
             run_times = []
             status, error, rows = "success", "", None
 
-            for run_iter in range(args.runs):
+            for run_iter in range(options.general.runs_per_query):
                 start_time = time.perf_counter()
                 try:
                     rows = spark.sql(sql).count()
@@ -171,21 +227,24 @@ def main() -> None:
 
             query_number = int(query_file.removeprefix("query").removesuffix(".sql"))
 
-            query_records.append({
-                "run_id": run_id,
-                "started_at": started_at,
-                "query_id": query_number,
-                "query_file": query_file,
-                "query_version": args.queries,
-                "statement_part": i,
-                "min_seconds": min_time,
-                "max_seconds": max_time,
-                "avg_seconds": avg_time,
-                "status": status,
-                "row_count": rows,
-                "error": error[:32767],
-                "scale_factor": args.scale_factor,
-            })
+            query_records.append(
+                {
+                    "run_id": run_id,
+                    "started_at": started_at,
+                    "query_id": query_number,
+                    "query_file": query_file,
+                    "query_version": args.queries,
+                    "statement_part": i,
+                    "min_seconds": min_time,
+                    "max_seconds": max_time,
+                    "avg_seconds": avg_time,
+                    "status": status,
+                    "row_count": rows,
+                    "error": error[:32767],
+                    "scale_factor": args.scale_factor,
+                    **run_configuration,
+                }
+            )
 
             # Force a full JVM garbage collection between statements (outside
             # the timed section). Otherwise the heap keeps the memory grown by
@@ -198,18 +257,17 @@ def main() -> None:
             except Exception:
                 pass
 
-    # Capture benchmark duration before preparing and saving the workbook.
     run_elapsed_seconds = time.perf_counter() - run_start
     summary = build_summary(
         query_records,
         run_id=run_id,
         started_at=started_at,
         scale_factor=args.scale_factor,
-        runs_per_query=args.runs,
         parquet_dir=parquet_dir,
         queries_dir=queries_dir,
         run_elapsed_seconds=run_elapsed_seconds,
     )
+    summary.update(run_configuration)
     write_reports(run_directory, query_records, summary)
 
     input(f"\n⚠️ Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
