@@ -82,6 +82,12 @@ def _parse_args() -> argparse.Namespace:
         help="TPC-DS data scale factor used for this run",
     )
     parser.add_argument(
+        "--query-list",
+        type=int,
+        nargs="+",
+        help="run a specific list of query numbers (e.g. --query-list 14 23 72)",
+    )
+    parser.add_argument(
         "--queries",
         choices=QUERY_VERSIONS,
         default="original",
@@ -95,12 +101,18 @@ def _parse_args() -> argparse.Namespace:
         value is not None for value in (args.limit, args.start, args.end)
     ):
         parser.error("--query cannot be combined with --limit, --start or --end")
+    if args.query_list is not None and any(
+        value is not None for value in (args.query, args.limit, args.start, args.end)
+    ):
+        parser.error("--query-list cannot be combined with --query, --limit, --start or --end")
     return args
-
 
 def _query_selection_label(args: argparse.Namespace) -> str:
     """Describe the query selection arguments, e.g. "full", "query5", "from10_first3"."""
     parts = []
+    if args.query_list is not None:
+        # e.g. "queries_14_23_72"
+        parts.append(f"queries_{'_'.join(str(q) for q in args.query_list)}")
     if args.query is not None:
         parts.append(f"query{args.query}")
     elif args.start is not None and args.end is not None:
