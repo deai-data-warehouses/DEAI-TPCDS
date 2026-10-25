@@ -53,8 +53,10 @@ slashes are accepted in absolute Docker bind-mount paths, for example
 
 ## Run the stages
 
-Build the image once, and rebuild it when the Dockerfile or Python dependencies
-change:
+Build the image once, and rebuild it when the Dockerfile, the Python
+dependencies, or the code in `pipeline/` or `scripts/` change (those are copied
+into the image). `queries/` and `config/` are bind-mounted, so editing them
+needs no rebuild:
 
 ```powershell
 docker compose build
@@ -139,7 +141,7 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 | `--queries V` | Which query set to read: `original` (default, `queries/original/queries_<N>GB/`) or `changed` (`queries/changed/queries_<N>GB/`, only the modified queries). Recorded as `query_version` in each row; `changed` runs get a `_changed` suffix in the run folder name. |
 
 Run options that are not command-line flags live in `config/config.toml`,
-validated by `config/config.py` (unknown keys are rejected):
+validated by `pipeline/config_loader.py` (unknown keys are rejected):
 
 | Option | Description |
 |---|---|
@@ -147,13 +149,15 @@ validated by `config/config.py` (unknown keys are rejected):
 | `[spark] adaptative_enabled` | Sets `spark.sql.adaptive.enabled`. |
 | `[spark] adaptative_coalesce_partitions` | Sets `spark.sql.adaptive.coalescePartitions.enabled`. |
 | `[spark] adapatative_skew_join` | Sets `spark.sql.adaptive.skewJoin.enabled`. |
+| `[spark] broadcast_threshold_mb` | Sets `spark.sql.autoBroadcastJoinThreshold`, in MB (default `10`; `0` or `-1` disables automatic broadcast joins; explicit `BROADCAST` hints still apply). |
 | `[spark] use_partition`, `use_broadcast_joins_hints` | Flags available to query templates (see below); not Spark settings. |
 
 Before running, each query file is rendered as a Jinja template with these
 options as `options`, so a query can adapt to the configuration, e.g.
 `{% if options.spark.use_broadcast_joins_hints %}/*+ BROADCAST(d) */{% endif %}`.
-Referencing an undefined option fails the run. In Docker, `config/` is copied
-into the image, so changes to `config.toml` need `docker compose build`.
+Referencing an undefined option fails the run. In Docker, `config/` is
+bind-mounted read-only, so edits to `config.toml` apply on the next run without
+rebuilding.
 
 Benchmarking reads existing Parquet from `SCENARIOS_DIR` and the
 version-controlled queries in `queries/original/queries_<N>GB/` (not the
@@ -185,8 +189,8 @@ row per executed SQL statement and a `Run Summary` sheet with one row for the
 whole invocation. The same folder also contains `query_runs.csv` and
 `run_summary.csv`, exported from those respective sheets for analysis in a
 notebook or other tools. Both outputs include the run configuration from
-`config.toml` (`runs_per_query` and the partitioning, broadcast-hint, and
-adaptive query execution options).
+`config.toml` (`runs_per_query`, the broadcast threshold, and the partitioning,
+broadcast-hint, and adaptive query execution options).
 
 ## Generated layout
 

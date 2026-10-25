@@ -28,7 +28,6 @@ RUN python -m pip install --no-cache-dir \
     pyspark==4.2.0
 
 COPY pipeline ./pipeline
-COPY config ./config
 COPY scripts ./scripts
 
 # No default stage: each one is run explicitly, e.g.

@@ -1,14 +1,13 @@
 import argparse
 import os
-import sys
 import time
 import uuid
 
 from datetime import datetime, timezone
 from jinja2 import StrictUndefined, Template
 from pathlib import Path
-from pyspark.sql import SparkSession
 
+from config_loader import options
 from constants import (
     QUERY_VERSIONS,
     RUNS_DIR,
@@ -18,50 +17,24 @@ from constants import (
 )
 from reporting.report import write_reports
 from reporting.summary import build_summary
-from spark_session import create_spark_session, register_tables_in_spark
+from spark_session import (
+    apply_run_options,
+    create_spark_session,
+    register_tables_in_spark,
+)
 from toolkit.queries import normalize_sql_for_spark, select_query_files
 from toolkit.schema import get_table_names, incomplete_parquet_tables
 
 
-# Make the repository-root config package importable when run as a script. This
-# is necessary to be able to import the config module when running this file
-# directly, e.g. `python pipeline/benchmark.py ...`.
-project_root = str(Path(__file__).resolve().parent.parent)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-from config.config import options
-
-
-def set_session_configurations(
-    spark_session: SparkSession,
-) -> dict[str, int | bool]:
-    """
-    Apply run options to Spark and return them for inclusion in run metadata.
-    """
-    run_configuration: dict[str, int | bool] = {
-        "runs_per_query": options.general.runs_per_query,
-        "use_partition": options.spark.use_partition,
-        "use_broadcast_joins_hints": options.spark.use_broadcast_joins_hints,
-        "spark_adaptive_enabled": options.spark.adaptative_enabled,
-        "spark_adaptive_coalesce_partitions_enabled": (
-            options.spark.adaptative_coalesce_partitions
-        ),
-        "spark_adaptive_skew_join_enabled": options.spark.adapatative_skew_join,
-    }
-    spark_settings = {
-        "spark.sql.adaptive.enabled": "spark_adaptive_enabled",
-        "spark.sql.adaptive.coalescePartitions.enabled": (
-            "spark_adaptive_coalesce_partitions_enabled"
-        ),
-        "spark.sql.adaptive.skewJoin.enabled": "spark_adaptive_skew_join_enabled",
-    }
-
-    for spark_key, configuration_key in spark_settings.items():
-        spark_session.conf.set(
-            spark_key, str(run_configuration[configuration_key]).lower()
-        )
-    return run_configuration
+def _print_run_configuration(run_configuration: dict[str, int | bool]) -> None:
+    """Print the run configuration as an aligned key/value table."""
+    width = max(len(key) for key in run_configuration)
+    print("=================================")
+    print("  RUN CONFIGURATION")
+    print("=================================")
+    for key, value in run_configuration.items():
+        print(f"  {key:<{width}} : {value}")
+    print()
 
 
 def _parse_args() -> argparse.Namespace:
@@ -89,9 +62,6 @@ def _parse_args() -> argparse.Namespace:
         choices=QUERY_VERSIONS,
         default="original",
         help="read queries from queries/<QUERIES>/queries_<N>GB (default: original)",
-    )
-    parser.add_argument(
-        "--broadcast-threshold", type=int, default=10, help="Broadcast join threshold in MB (use -1 to disable)" 
     )
     args = parser.parse_args()
 
@@ -158,12 +128,8 @@ def main() -> None:
     spark = create_spark_session("TPCDS_Benchmark")
     spark.sparkContext.setLogLevel("ERROR")
 
-    # --- Broadcast Threshold ---
-    threshold_bytes = args.broadcast_threshold * 1024 * 1024 if args.broadcast_threshold > 0 else -1
-    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", str(threshold_bytes))
-    print(f"🔧 Broadcast Threshold set to: {args.broadcast_threshold} MB")
-
-    run_configuration = set_session_configurations(spark)
+    run_configuration = apply_run_options(spark, options)
+    _print_run_configuration(run_configuration)
 
     run_start = time.perf_counter()
     query_records = []

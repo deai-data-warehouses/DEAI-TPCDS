@@ -7,3 +7,4 @@ use_broadcast_joins_hints = false
 adaptative_enabled = true
 adaptative_coalesce_partitions = false
 adapatative_skew_join = false
+broadcast_threshold_mb = 10             # -1 disables auto broadcast
