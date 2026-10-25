@@ -48,6 +48,7 @@ def set_session_configurations(
             options.spark.adaptative_coalesce_partitions
         ),
         "spark_adaptive_skew_join_enabled": options.spark.adapatative_skew_join,
+        "spark_auto_broadcast_join_threshold_mb": options.spark.broadcast_threshold_mb
     }
     spark_settings = {
         "spark.sql.adaptive.enabled": "spark_adaptive_enabled",
@@ -55,12 +56,18 @@ def set_session_configurations(
             "spark_adaptive_coalesce_partitions_enabled"
         ),
         "spark.sql.adaptive.skewJoin.enabled": "spark_adaptive_skew_join_enabled",
+        "spark.sql.autoBroadcastJoinThreshold": "spark_auto_broadcast_join_threshold_mb",
     }
 
     for spark_key, configuration_key in spark_settings.items():
-        spark_session.conf.set(
-            spark_key, str(run_configuration[configuration_key]).lower()
-        )
+        value = run_configuration[configuration_key]
+
+        if configuration_key == "spark_auto_broadcast_join_threshold_mb":
+            # Convert MB to bytes for Spark configuration
+            value = value * 1024 * 1024 if value > 0 else -1
+
+        spark_session.conf.set(spark_key, str(value).lower())
+
     return run_configuration
 
 
@@ -89,9 +96,6 @@ def _parse_args() -> argparse.Namespace:
         choices=QUERY_VERSIONS,
         default="original",
         help="read queries from queries/<QUERIES>/queries_<N>GB (default: original)",
-    )
-    parser.add_argument(
-        "--broadcast-threshold", type=int, default=10, help="Broadcast join threshold in MB (use -1 to disable)" 
     )
     args = parser.parse_args()
 
@@ -157,11 +161,6 @@ def main() -> None:
     # Create session and configurations
     spark = create_spark_session("TPCDS_Benchmark")
     spark.sparkContext.setLogLevel("ERROR")
-
-    # --- Broadcast Threshold ---
-    threshold_bytes = args.broadcast_threshold * 1024 * 1024 if args.broadcast_threshold > 0 else -1
-    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", str(threshold_bytes))
-    print(f"🔧 Broadcast Threshold set to: {args.broadcast_threshold} MB")
 
     run_configuration = set_session_configurations(spark)
 
