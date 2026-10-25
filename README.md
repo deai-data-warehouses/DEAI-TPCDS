@@ -53,8 +53,10 @@ slashes are accepted in absolute Docker bind-mount paths, for example
 
 ## Run the stages
 
-Build the image once, and rebuild it when the Dockerfile or Python dependencies
-change:
+Build the image once, and rebuild it when the Dockerfile, the Python
+dependencies, or the code in `pipeline/` or `scripts/` change (those are copied
+into the image). `queries/` and `config/` are bind-mounted, so editing them
+needs no rebuild:
 
 ```powershell
 docker compose build
@@ -152,8 +154,9 @@ validated by `config/config.py` (unknown keys are rejected):
 Before running, each query file is rendered as a Jinja template with these
 options as `options`, so a query can adapt to the configuration, e.g.
 `{% if options.spark.use_broadcast_joins_hints %}/*+ BROADCAST(d) */{% endif %}`.
-Referencing an undefined option fails the run. In Docker, `config/` is copied
-into the image, so changes to `config.toml` need `docker compose build`.
+Referencing an undefined option fails the run. In Docker, `config/` is
+bind-mounted read-only, so edits to `config.toml` apply on the next run without
+rebuilding.
 
 Benchmarking reads existing Parquet from `SCENARIOS_DIR` and the
 version-controlled queries in `queries/original/queries_<N>GB/` (not the

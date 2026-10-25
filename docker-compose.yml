@@ -50,3 +50,12 @@ services:
         read_only: true
         bind:
           create_host_path: false
+
+      # Run configuration; mounted (not copied into the image) so edits to
+      # config.toml apply without rebuilding
+      - type: bind
+        source: ./config
+        target: /app/config
+        read_only: true
+        bind:
+          create_host_path: false
