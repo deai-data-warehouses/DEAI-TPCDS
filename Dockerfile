@@ -28,9 +28,9 @@ RUN python -m pip install --no-cache-dir \
     pyspark==4.2.0
 
 COPY pipeline ./pipeline
-
+COPY config ./config
 COPY scripts ./scripts
 
-COPY config ./config
-
-CMD ["python", "pipeline/main.py"]
+# No default stage: each one is run explicitly, e.g.
+# `docker compose run --rm pipeline python pipeline/prepare.py --scale-factor 1`
+CMD ["echo", "Run a stage: python pipeline/{prepare,convert,benchmark}.py --scale-factor N (see README)"]

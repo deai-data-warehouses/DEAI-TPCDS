@@ -1,5 +1,5 @@
 [general]
-num_runs = 2
+runs_per_query = 2
 
 [spark]
 use_partition = false

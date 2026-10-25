@@ -20,7 +20,7 @@ for i in $(seq 1 "$RUNS"); do
   echo
   echo "=== Run $i/$RUNS ==="
 
-  OUTPUT=$("$PYTHON_BIN" pipeline/benchmark.py --test-run --scale-factor "$SCALE_FACTOR" --query "$QUERY" 2>&1) || {
+  OUTPUT=$("$PYTHON_BIN" pipeline/benchmark.py --scale-factor "$SCALE_FACTOR" --query "$QUERY" 2>&1) || {
     echo "$OUTPUT"
     echo "⚠️ Benchmark failed on run $i"
     continue

@@ -1,7 +1,6 @@
 import os
 
 from dotenv import load_dotenv
-from pyspark.sql import SparkSession
 
 load_dotenv()
 
@@ -14,6 +13,10 @@ QUERY_TEMPLATES_DIR = os.path.join(STAGED_TPCDS_DIR, "query_templates")
 SQL_SCHEMA_PATH = os.path.join(STAGED_TOOLS_DIR, "tpcds.sql")
 RUNS_DIR = os.path.join(SCENARIOS_DIR, "runs")
 
+QUERIES_DIR = os.getenv("QUERIES_DIR")
+# Subfolders of QUERIES_DIR the benchmark can read from
+QUERY_VERSIONS = ("original", "changed")
+
 def get_scenario_paths(scale_factor):
     label = f"{scale_factor:g}GB"
     return (
@@ -22,20 +25,5 @@ def get_scenario_paths(scale_factor):
         os.path.join(SCENARIOS_DIR, f"queries_{label}"),
     )
 
-def create_spark_session(app_name: str) -> SparkSession:
-    return (
-        SparkSession.builder \
-        .appName(app_name) \
-        .master("local[4]") \
-        .config("spark.ui.port", "4040") \
-        .config("spark.port.maxRetries", "0") \
-        .config("spark.driver.memory", "6g") \
-        # Shrink the heap after a full GC so the JVM returns unused memory to
-        # the OS instead of holding on to it (keeps at most 30% of the heap
-        # free).
-        .config("spark.driver.extraJavaOptions",
-                "-XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30") \
-        .config("spark.sql.ansi.enable", "true") \
-        .config("spark.sql.ansi.doubleQuotedIdentifiers", "true") \
-        .getOrCreate()
-    )
+def get_benchmark_queries_dir(scale_factor, version="original"):
+    return os.path.join(QUERIES_DIR, version, f"queries_{scale_factor:g}GB")

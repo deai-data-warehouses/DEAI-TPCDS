@@ -12,7 +12,7 @@ class StrictBaseModel(BaseModel):
 
 # 2. Section [general]: Paths, executions, behavior of the script
 class GeneralConfig(StrictBaseModel):
-    num_runs: int = Field(default=5, gt=0)  # gt=0 makes sure that always >= 1
+    runs_per_query: int = Field(default=5, gt=0)  # gt=0 makes sure that always >= 1
 
 
 

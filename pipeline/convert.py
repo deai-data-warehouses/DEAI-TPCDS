@@ -4,12 +4,14 @@ from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 
-from constants import (
-    SQL_SCHEMA_PATH,
-    create_spark_session,
-    get_scenario_paths,
+from constants import SQL_SCHEMA_PATH, get_scenario_paths
+from spark_session import create_spark_session
+from toolkit.queries import clean_sql_comments
+from toolkit.schema import (
+    get_table_names,
+    incomplete_parquet_tables,
+    parquet_table_is_complete,
 )
-from utils import clean_sql_comments, get_table_names, parquet_table_is_complete
 
 from config.config import options
 
@@ -22,7 +24,7 @@ def write_table_partitioned(dataframe, table_name, output_path):
     else:
         dataframe.write.mode("overwrite").parquet(str(output_path))
 
-def main() -> None:
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Convert TPC-DS raw data files to Parquet."
     )
@@ -40,16 +42,17 @@ def main() -> None:
     args = parser.parse_args()
     if args.scale_factor <= 0:
         parser.error("--scale-factor must be a positive integer")
+    return args
 
+
+def main() -> None:
+    args = _parse_args()
     data_dir_str, parquet_dir_str, _ = get_scenario_paths(args.scale_factor)
     data_dir = Path(data_dir_str)
     parquet_dir = Path(parquet_dir_str)
 
     schema_path = Path(SQL_SCHEMA_PATH)
-    if not schema_path.is_file():
-        raise FileNotFoundError(
-            f"TPC-DS schema not found at {schema_path}; run pipeline/prepare.py first."
-        )
+    table_names = get_table_names(schema_path)
     if not data_dir.is_dir():
         raise FileNotFoundError(
             f"Raw data directory not found at {data_dir}; run pipeline/prepare.py first."
@@ -65,7 +68,6 @@ def main() -> None:
             if table_name != "dbgen_version":
                 table_statements.append((table_name, statement))
 
-    table_names = get_table_names(schema_sql)
     if not table_names:
         raise RuntimeError(f"No TPC-DS tables found in {schema_path}")
     missing_data = [
@@ -81,12 +83,7 @@ def main() -> None:
             + ". Run pipeline/prepare.py to generate them."
         )
 
-    completed = [
-        name
-        for name in table_names
-        if parquet_table_is_complete(str(parquet_dir / name))
-    ]
-    if not args.force and len(completed) == len(table_names):
+    if not args.force and not incomplete_parquet_tables(parquet_dir, table_names):
         print(f"All Parquet tables are already complete in {parquet_dir}; nothing to do.")
         return
 
@@ -97,8 +94,8 @@ def main() -> None:
         "Generate parquet files started."
     )
     spark = create_spark_session("TPCDS_Parquet_Conversion")
+    spark.sparkContext.setLogLevel("ERROR")
     try:
-        spark.sparkContext.setLogLevel("ERROR")
         for table_name, statement in table_statements:
             output_path = parquet_dir / table_name
             if not args.force and parquet_table_is_complete(str(output_path)):
@@ -135,11 +132,7 @@ def main() -> None:
     finally:
         spark.stop()
 
-    incomplete = [
-        name
-        for name in table_names
-        if not parquet_table_is_complete(str(parquet_dir / name))
-    ]
+    incomplete = incomplete_parquet_tables(parquet_dir, table_names)
     if incomplete:
         raise RuntimeError(f"Conversion left incomplete Parquet tables: {incomplete}")
     print(f"All tables have been converted to Parquet in {parquet_dir}.")
