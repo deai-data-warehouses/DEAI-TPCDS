@@ -3,9 +3,15 @@ import os
 import time
 import uuid
 
+from contextlib import redirect_stdout
 from datetime import datetime, timezone
-from jinja2 import StrictUndefined, Template
+from io import StringIO
 from pathlib import Path
+
+from jinja2 import StrictUndefined, Template
+from py4j.protocol import Py4JError
+from pyspark.errors import PySparkException
+from pyspark.sql import DataFrame
 
 from config_loader import options
 from constants import (
@@ -24,6 +30,24 @@ from spark_session import (
 )
 from toolkit.queries import normalize_sql_for_spark, select_query_files
 from toolkit.schema import get_table_names, incomplete_parquet_tables
+
+
+def _save_query_plan(
+    dataframe: DataFrame,
+    run_directory: str,
+    query_file: str,
+    statement_part: int,
+) -> Path:
+    """Write a query's extended Spark plan to a text file outside the CSV report."""
+    plan_directory = Path(run_directory) / "query_plans"
+    plan_directory.mkdir(parents=True, exist_ok=True)
+
+    plan_path = plan_directory / f"{Path(query_file).stem}_part{statement_part}.txt"
+    plan_output = StringIO()
+    with redirect_stdout(plan_output):
+        dataframe.explain(mode="extended")
+    plan_path.write_text(plan_output.getvalue(), encoding="utf-8")
+    return plan_path
 
 
 def _print_run_configuration(run_configuration: dict[str, int | bool]) -> None:
@@ -168,8 +192,18 @@ def main() -> None:
 
             run_times = []
             status, error, rows = "success", "", None
+            try:
+                plan_path = _save_query_plan(
+                    spark.sql(sql), run_directory, query_file, i
+                )
+                print(f"  Query plan saved to {plan_path}")
+            except (OSError, Py4JError, PySparkException) as e:
+                status, error = "error", str(e)
+                print(f"  - Could not save query plan: {error}")
 
             for run_iter in range(options.general.runs_per_query):
+                if status == "error":
+                    break
                 start_time = time.perf_counter()
                 try:
                     rows = spark.sql(sql).count()
