@@ -150,6 +150,7 @@ validated by `pipeline/config_loader.py` (unknown keys are rejected):
 | `[spark] adaptative_coalesce_partitions` | Sets `spark.sql.adaptive.coalescePartitions.enabled`. |
 | `[spark] adapatative_skew_join` | Sets `spark.sql.adaptive.skewJoin.enabled`. |
 | `[spark] broadcast_threshold_mb` | Sets `spark.sql.autoBroadcastJoinThreshold`, in MB (default `10`; `0` or `-1` disables automatic broadcast joins; explicit `BROADCAST` hints still apply). |
+| `[spark] register_tables_as` | How the Parquet tables are registered: `"views"` (default, temporary views) or `"tables"` (external catalog tables over the same Parquet files, which support `ANALYZE TABLE`). |
 | `[spark] use_partition`, `use_broadcast_joins_hints` | Flags available to query templates (see below); not Spark settings. |
 
 Before running, each query file is rendered as a Jinja template with these
@@ -189,8 +190,8 @@ row per executed SQL statement and a `Run Summary` sheet with one row for the
 whole invocation. The same folder also contains `query_runs.csv` and
 `run_summary.csv`, exported from those respective sheets for analysis in a
 notebook or other tools. Both outputs include the run configuration from
-`config.toml` (`runs_per_query`, the broadcast threshold, and the partitioning,
-broadcast-hint, and adaptive query execution options).
+`config.toml` (`runs_per_query`, the broadcast threshold, the table registration
+mode, and the partitioning, broadcast-hint, and adaptive query execution options).
 
 ## Generated layout
 

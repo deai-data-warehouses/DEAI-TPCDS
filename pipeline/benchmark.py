@@ -26,7 +26,7 @@ from toolkit.queries import normalize_sql_for_spark, select_query_files
 from toolkit.schema import get_table_names, incomplete_parquet_tables
 
 
-def _print_run_configuration(run_configuration: dict[str, int | bool]) -> None:
+def _print_run_configuration(run_configuration: dict[str, int | bool | str]) -> None:
     """Print the run configuration as an aligned key/value table."""
     width = max(len(key) for key in run_configuration)
     print("=================================")
@@ -134,8 +134,8 @@ def main() -> None:
     run_start = time.perf_counter()
     query_records = []
 
-    print("Registering temporary views from Parquet files...")
-    register_tables_in_spark(spark, parquet_dir)
+    print(f"Registering Parquet files as {options.spark.register_tables_as}...")
+    register_tables_in_spark(spark, parquet_dir, options.spark.register_tables_as)
     print("All tables are ready for SQL queries!\n")
 
     print("=================================")

@@ -1,6 +1,7 @@
 import tomllib
 
 from pathlib import Path
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from constants import CONFIG_PATH
@@ -20,7 +21,8 @@ class SparkConfig(StrictBaseModel):
     adaptative_enabled: bool = False
     adaptative_coalesce_partitions: bool = False
     adapatative_skew_join: bool = False
-    broadcast_threshold_mb: int = Field(default=10, ge=-1)  # -1 disables auto broadcast
+    broadcast_threshold_mb: int = Field(default=10, ge=-1)    # -1 disables auto broadcast
+    register_tables_as: Literal["views", "tables"] = "views"  # tables allow ANALYZE TABLE
 
 # 4. Principal model that joins all sections
 class RunConfig(StrictBaseModel):
