@@ -192,6 +192,39 @@ notebook or other tools. Both outputs include the run configuration from
 `config.toml` (`runs_per_query`, the broadcast threshold, and the partitioning,
 broadcast-hint, and adaptive query execution options).
 
+### 4. Validate
+
+Validate runs selected queries from `queries/changed/queries_<N>GB/` and their
+matching `queryN.sql` files from `queries/original/queries_<N>GB/`:
+
+```powershell
+docker compose run --rm --service-ports pipeline python pipeline/validate.py --scale-factor 1
+docker compose run --rm --service-ports pipeline python pipeline/validate.py --scale-factor 1 --query 5
+docker compose run --rm --service-ports pipeline python pipeline/validate.py --scale-factor 1 --query-list 14 23 72
+docker compose run --rm --service-ports pipeline python pipeline/validate.py --scale-factor 1 --start 10 --end 20
+```
+
+Validate supports the same query-selection arguments as Benchmark:
+`--scale-factor`, `--limit`, `--query`, `--start`, `--end`, and `--query-list`.
+It selects from the changed-query directory, so a full run validates the
+changed queries present there; each selected query must have an original
+counterpart with the same filename. `--queries` is not accepted because
+Validate always executes both versions.
+
+Both versions run `runs_per_query` times from `config.toml`. Changed queries use
+the configured Jinja flags and Spark options. Original queries use default
+template flags and a fresh Spark session with Spark's default SQL settings.
+The two versions run in isolated SQL sessions. Result comparison ignores row
+ordering but preserves duplicate rows. The report's `Validation` sheet gives
+the average runtime for each version, optimization gain
+`(original average - changed average) / original average * 100`, whether the
+results are identical, and up to five example rows found only on either side
+when results differ. Comparison errors, statement-count mismatches, and
+execution errors are recorded in the sheet. A zero or unavailable original
+runtime has no gain value.
+Mismatched statement counts or failed executions are explicitly marked and
+are not reported as identical.
+
 ## Generated layout
 
 After preparation and conversion, the scenarios directory contains (if scale = 1GB):
