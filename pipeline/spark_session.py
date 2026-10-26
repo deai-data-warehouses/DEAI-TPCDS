@@ -22,7 +22,9 @@ def create_spark_session(app_name: str) -> SparkSession:
     )
 
 
-def register_tables_in_spark(spark_session, parquet_dir, register_as="views"):
+def register_tables_in_spark(
+    spark_session, parquet_dir, register_as="views", analyze=False
+):
     """
     Registers Parquet tables in a Spark session, as temporary views or as
     catalog tables.
@@ -32,13 +34,19 @@ def register_tables_in_spark(spark_session, parquet_dir, register_as="views"):
         parquet_dir: The directory containing the Parquet files.
         register_as: "views" for temporary views, or "tables" for external
             catalog tables, which (unlike views) support ANALYZE TABLE.
+        analyze: Whether to compute table and column statistics for the CBO
+            after creating each table. Requires register_as="tables".
     """
+    if analyze and register_as != "tables":
+        raise ValueError('analyze=True requires register_as="tables"')
+
     for table_name in os.listdir(parquet_dir):
         table_path = os.path.join(parquet_dir, table_name)
         if os.path.isdir(table_path):
             # Register with its original table name (e.g., "store_sales") for
             # query resolution
             if register_as == "tables":
+                print(f"Registering {table_name} as an external table")
                 # A temp view with the same name would shadow the table
                 spark_session.catalog.dropTempView(table_name)
                 # External table: dropping it leaves the Parquet files intact
@@ -46,7 +54,12 @@ def register_tables_in_spark(spark_session, parquet_dir, register_as="views"):
                 spark_session.catalog.createTable(
                     table_name, path=table_path, source="parquet"
                 )
+                if analyze:
+                    spark_session.sql(
+                        f"ANALYZE TABLE {table_name} COMPUTE STATISTICS FOR ALL COLUMNS"
+                    )
             else:
+                print(f"Registering {table_name} as a temporary view...")
                 df = spark_session.read.parquet(table_path)
                 df.createOrReplaceTempView(table_name)
 
@@ -73,8 +86,12 @@ def apply_run_options(spark_session, options) -> dict[str, int | bool | str]:
         "spark_adaptive_skew_join_enabled": options.spark.adapatative_skew_join,
         "spark_auto_broadcast_join_threshold_mb": options.spark.broadcast_threshold_mb,
         "register_tables_as": options.spark.register_tables_as,
+        "spark_cbo_enabled": options.spark.cbo_enabled,
+        "spark_cbo_join_reorder_enabled": options.spark.cbo_join_reorder,
     }
     boolean_settings = {
+        "spark.sql.cbo.enabled": "spark_cbo_enabled",
+        "spark.sql.cbo.joinReorder.enabled": "spark_cbo_join_reorder_enabled",
         "spark.sql.adaptive.enabled": "spark_adaptive_enabled",
         "spark.sql.adaptive.coalescePartitions.enabled": (
             "spark_adaptive_coalesce_partitions_enabled"

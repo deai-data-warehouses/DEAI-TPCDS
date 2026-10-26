@@ -135,7 +135,14 @@ def main() -> None:
     query_records = []
 
     print(f"Registering Parquet files as {options.spark.register_tables_as}...")
-    register_tables_in_spark(spark, parquet_dir, options.spark.register_tables_as)
+    if options.spark.cbo_enabled:
+        print("Computing table and column statistics for the CBO...")
+    register_tables_in_spark(
+        spark,
+        parquet_dir,
+        options.spark.register_tables_as,
+        analyze=options.spark.cbo_enabled,
+    )
     print("All tables are ready for SQL queries!\n")
 
     print("=================================")

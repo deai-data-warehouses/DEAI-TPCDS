@@ -151,6 +151,8 @@ validated by `pipeline/config_loader.py` (unknown keys are rejected):
 | `[spark] adapatative_skew_join` | Sets `spark.sql.adaptive.skewJoin.enabled`. |
 | `[spark] broadcast_threshold_mb` | Sets `spark.sql.autoBroadcastJoinThreshold`, in MB (default `10`; `0` or `-1` disables automatic broadcast joins; explicit `BROADCAST` hints still apply). |
 | `[spark] register_tables_as` | How the Parquet tables are registered: `"views"` (default, temporary views) or `"tables"` (external catalog tables over the same Parquet files, which support `ANALYZE TABLE`). |
+| `[spark] cbo_enabled` | Sets `spark.sql.cbo.enabled`, and runs `ANALYZE TABLE ... COMPUTE STATISTICS FOR ALL COLUMNS` on every table after registering it (default `false`). Requires `register_tables_as = "tables"`. The analysis time counts toward the run's total elapsed time, not toward any query's timings. |
+| `[spark] cbo_join_reorder` | Sets `spark.sql.cbo.joinReorder.enabled`, letting the CBO reorder joins using the collected statistics (default `false`). Requires `cbo_enabled = true`. |
 | `[spark] use_partition`, `use_broadcast_joins_hints` | Flags available to query templates (see below); not Spark settings. |
 
 Before running, each query file is rendered as a Jinja template with these
