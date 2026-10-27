@@ -29,6 +29,13 @@ services:
       - "4040:4040"    # Spark UI
 
     volumes:
+      # Use the current source tree without rebuilding the image for pipeline
+      # code changes.
+      - type: bind
+        source: ./pipeline
+        target: /app/pipeline
+        read_only: true
+
       - type: bind
         source: ${TPCDS_TOOL_DIR}
         target: /input/tpcds-tool

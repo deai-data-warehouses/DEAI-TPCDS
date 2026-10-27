@@ -132,7 +132,9 @@ def _query_selection_label(args: argparse.Namespace) -> str:
 
 def main() -> None:
     args = _parse_args()
-    _, parquet_dir, _ = get_scenario_paths(args.scale_factor)
+    _, parquet_dir, _ = get_scenario_paths(
+        args.scale_factor, options.spark.use_partition
+    )
     queries_dir = get_benchmark_queries_dir(args.scale_factor, args.queries)
     query_files = select_query_files(args, queries_dir)
 
@@ -161,7 +163,7 @@ def main() -> None:
     os.makedirs(run_directory, exist_ok=True)
 
     # Create session and configurations
-    spark = create_spark_session("TPCDS_Benchmark")
+    spark = create_spark_session("TPCDS_Benchmark", options)
     spark.sparkContext.setLogLevel("ERROR")
 
     run_configuration = apply_run_options(spark, options)
@@ -171,7 +173,7 @@ def main() -> None:
     query_records = []
 
     print("Registering temporary views from Parquet files...")
-    register_tables_in_spark(spark, parquet_dir)
+    register_tables_in_spark(spark, parquet_dir, options)
     print("All tables are ready for SQL queries!\n")
 
     print("=================================")

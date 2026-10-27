@@ -46,7 +46,9 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    data_dir_str, parquet_dir_str, _ = get_scenario_paths(args.scale_factor)
+    data_dir_str, parquet_dir_str, _ = get_scenario_paths(
+        args.scale_factor, options.spark.use_partition
+    )
     data_dir = Path(data_dir_str)
     parquet_dir = Path(parquet_dir_str)
 
@@ -92,7 +94,7 @@ def main() -> None:
         f"[{datetime.now():%Y-%m-%d %H:%M:%S}] "
         "Generate parquet files started."
     )
-    spark = create_spark_session("TPCDS_Parquet_Conversion")
+    spark = create_spark_session("TPCDS_Parquet_Conversion", options=options)
     spark.sparkContext.setLogLevel("ERROR")
     try:
         for table_name, statement in table_statements:
@@ -127,7 +129,7 @@ def main() -> None:
             if not parquet_table_is_complete(str(output_path)):
                 raise RuntimeError(f"Parquet output is incomplete for table {table_name}")
             print(f"Parquet export completed: {table_name}")
-        input(f"Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
+        # input(f"Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
     finally:
         spark.stop()
 
