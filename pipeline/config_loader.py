@@ -1,9 +1,10 @@
 import tomllib
-
 from pathlib import Path
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
 
 from constants import CONFIG_PATH
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+
 
 # 1. Based config shared by all config sections, to ensure consistency and immutability
 class StrictBaseModel(BaseModel):
@@ -20,7 +21,14 @@ class SparkConfig(StrictBaseModel):
     adaptative_enabled: bool = False
     adaptative_coalesce_partitions: bool = False
     adapatative_skew_join: bool = False
-    broadcast_threshold_mb: int = Field(default=10, ge=-1)  # -1 disables auto broadcast
+    # -1 disables auto broadcast
+    broadcast_threshold_mb: int = Field(default=10, ge=-1)
+    # Spark default is 200, -1 dynamic calculation
+    shuffle_partitions: PositiveInt | Literal[-1] = Field(default=200)
+    # if False, use 4 cores for local testing
+    use_all_cores: bool = True
+    tune_memory_allocation: bool = False
+    enable_static_caching: bool = False
 
 # 4. Principal model that joins all sections
 class RunConfig(StrictBaseModel):
