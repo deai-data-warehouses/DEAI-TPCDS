@@ -94,7 +94,11 @@ def main() -> None:
         f"[{datetime.now():%Y-%m-%d %H:%M:%S}] "
         "Generate parquet files started."
     )
-    spark = create_spark_session("TPCDS_Parquet_Conversion", options=options)
+    spark = create_spark_session(
+        "TPCDS_Parquet_Conversion",
+        use_all_cores=options.spark.use_all_cores,
+        tune_memory_allocation=options.spark.tune_memory_allocation
+    )
     spark.sparkContext.setLogLevel("ERROR")
     try:
         for table_name, statement in table_statements:
