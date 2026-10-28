@@ -21,11 +21,12 @@ CONFIG_PATH = str(Path(__file__).resolve().parent.parent / "config" / "config.to
 # Subfolders of QUERIES_DIR the benchmark can read from
 QUERY_VERSIONS = ("original", "changed")
 
-def get_scenario_paths(scale_factor):
+def get_scenario_paths(scale_factor, use_partition=False):
     label = f"{scale_factor:g}GB"
+    parquet_label = f"parquet_partitioned_{label}" if use_partition else f"parquet_{label}"
     return (
         os.path.join(SCENARIOS_DIR, f"data_{label}"),
-        os.path.join(SCENARIOS_DIR, f"parquet_{label}"),
+        os.path.join(SCENARIOS_DIR, parquet_label),
         os.path.join(SCENARIOS_DIR, f"queries_{label}"),
     )
 

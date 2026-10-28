@@ -3,9 +3,15 @@ import os
 import time
 import uuid
 
+from contextlib import redirect_stdout
 from datetime import datetime, timezone
-from jinja2 import StrictUndefined, Template
+from io import StringIO
 from pathlib import Path
+
+from jinja2 import StrictUndefined, Template
+from py4j.protocol import Py4JError
+from pyspark.errors import PySparkException
+from pyspark.sql import DataFrame
 
 from config_loader import options
 from constants import (
@@ -26,7 +32,25 @@ from toolkit.queries import normalize_sql_for_spark, select_query_files
 from toolkit.schema import get_table_names, incomplete_parquet_tables
 
 
-def _print_run_configuration(run_configuration: dict[str, int | bool | str]) -> None:
+def _save_query_plan(
+    dataframe: DataFrame,
+    run_directory: str,
+    query_file: str,
+    statement_part: int,
+) -> Path:
+    """Write a query's extended Spark plan to a text file outside the CSV report."""
+    plan_directory = Path(run_directory) / "query_plans"
+    plan_directory.mkdir(parents=True, exist_ok=True)
+
+    plan_path = plan_directory / f"{Path(query_file).stem}_part{statement_part}.txt"
+    plan_output = StringIO()
+    with redirect_stdout(plan_output):
+        dataframe.explain(mode="extended")
+    plan_path.write_text(plan_output.getvalue(), encoding="utf-8")
+    return plan_path
+
+
+def _print_run_configuration(run_configuration: dict[str, int | bool]) -> None:
     """Print the run configuration as an aligned key/value table."""
     width = max(len(key) for key in run_configuration)
     print("=================================")
@@ -58,6 +82,12 @@ def _parse_args() -> argparse.Namespace:
         help="TPC-DS data scale factor used for this run",
     )
     parser.add_argument(
+        "--query-list",
+        type=int,
+        nargs="+",
+        help="run a specific list of query numbers (e.g. --query-list 14 23 72)",
+    )
+    parser.add_argument(
         "--queries",
         choices=QUERY_VERSIONS,
         default="original",
@@ -71,12 +101,18 @@ def _parse_args() -> argparse.Namespace:
         value is not None for value in (args.limit, args.start, args.end)
     ):
         parser.error("--query cannot be combined with --limit, --start or --end")
+    if args.query_list is not None and any(
+        value is not None for value in (args.query, args.limit, args.start, args.end)
+    ):
+        parser.error("--query-list cannot be combined with --query, --limit, --start or --end")
     return args
-
 
 def _query_selection_label(args: argparse.Namespace) -> str:
     """Describe the query selection arguments, e.g. "full", "query5", "from10_first3"."""
     parts = []
+    if args.query_list is not None:
+        # e.g. "queries_14_23_72"
+        parts.append(f"queries_{'_'.join(str(q) for q in args.query_list)}")
     if args.query is not None:
         parts.append(f"query{args.query}")
     elif args.start is not None and args.end is not None:
@@ -96,7 +132,9 @@ def _query_selection_label(args: argparse.Namespace) -> str:
 
 def main() -> None:
     args = _parse_args()
-    _, parquet_dir, _ = get_scenario_paths(args.scale_factor)
+    _, parquet_dir, _ = get_scenario_paths(
+        args.scale_factor, options.spark.use_partition
+    )
     queries_dir = get_benchmark_queries_dir(args.scale_factor, args.queries)
     query_files = select_query_files(args, queries_dir)
 
@@ -125,7 +163,11 @@ def main() -> None:
     os.makedirs(run_directory, exist_ok=True)
 
     # Create session and configurations
-    spark = create_spark_session("TPCDS_Benchmark")
+    spark = create_spark_session(
+        "TPCDS_Benchmark",
+        use_all_cores=options.spark.use_all_cores,
+        tune_memory_allocation=options.spark.tune_memory_allocation
+    )
     spark.sparkContext.setLogLevel("ERROR")
 
     run_configuration = apply_run_options(spark, options)
@@ -138,10 +180,11 @@ def main() -> None:
     if options.spark.cbo_enabled:
         print("Computing table and column statistics for the CBO...")
     register_tables_in_spark(
-        spark,
-        parquet_dir,
-        options.spark.register_tables_as,
+        spark_session=spark,
+        parquet_dir=parquet_dir,
+        register_as=options.spark.register_tables_as,
         analyze=options.spark.cbo_enabled,
+        enable_static_caching=options.spark.enable_static_caching
     )
     print("All tables are ready for SQL queries!\n")
 
@@ -175,8 +218,18 @@ def main() -> None:
 
             run_times = []
             status, error, rows = "success", "", None
+            try:
+                plan_path = _save_query_plan(
+                    spark.sql(sql), run_directory, query_file, i
+                )
+                print(f"  Query plan saved to {plan_path}")
+            except (OSError, Py4JError, PySparkException) as e:
+                status, error = "error", str(e)
+                print(f"  - Could not save query plan: {error}")
 
             for run_iter in range(options.general.runs_per_query):
+                if status == "error":
+                    break
                 start_time = time.perf_counter()
                 try:
                     rows = spark.sql(sql).count()

@@ -1,20 +1,18 @@
 import tomllib
-
 from pathlib import Path
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from constants import CONFIG_PATH
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
-# 1. Based config shared by all config sections, to ensure consistency and immutability
+
 class StrictBaseModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-# 2. Section [general]: Paths, executions, behavior of the script
 class GeneralConfig(StrictBaseModel):
     runs_per_query: int = Field(default=5, gt=0)  # gt=0 makes sure that always >= 1
 
-# 3. Section [spark]: Optimizations, hints and performance tests
 class SparkConfig(StrictBaseModel):
     use_partition: bool = False
     use_broadcast_joins_hints: bool = False
@@ -25,6 +23,10 @@ class SparkConfig(StrictBaseModel):
     register_tables_as: Literal["views", "tables"] = "views"  # tables allow ANALYZE TABLE
     cbo_enabled: bool = False                                 # runs ANALYZE TABLE on registration
     cbo_join_reorder: bool = False                            # requires cbo_enabled
+    shuffle_partitions: PositiveInt | Literal[-1] = Field(default=200)    # Spark default is 200, -1 dynamic calculation
+    use_all_cores: bool = True    # if False, use 4 cores for local testing
+    tune_memory_allocation: bool = False
+    enable_static_caching: bool = False
 
     # The CBO needs statistics, and ANALYZE TABLE does not work on temp views
     @model_validator(mode="after")
@@ -36,7 +38,7 @@ class SparkConfig(StrictBaseModel):
             raise ValueError("cbo_join_reorder = true requires cbo_enabled = true")
         return self
 
-# 4. Principal model that joins all sections
+
 class RunConfig(StrictBaseModel):
     general: GeneralConfig = GeneralConfig()
     spark: SparkConfig = SparkConfig()

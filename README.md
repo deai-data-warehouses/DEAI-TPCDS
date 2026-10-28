@@ -118,6 +118,13 @@ docker compose run --rm --service-ports pipeline python pipeline/convert.py --sc
 Conversion fails with a list of missing raw inputs instead of silently
 producing an incomplete dataset.
 
+The `use_partition` setting in `config/config.toml` selects the Parquet output
+layout. Convert each scale factor once with `use_partition = false` and once
+with `use_partition = true`; these are kept separately as
+`scenarios/parquet_<N>GB` and `scenarios/parquet_partitioned_<N>GB`. The
+experiment runner requires both layouts for every scale factor before it
+starts.
+
 ### 3. Benchmark
 
 Run all generated queries, or select a subset:
@@ -143,6 +150,24 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 Run options that are not command-line flags live in `config/config.toml`,
 validated by `pipeline/config_loader.py` (unknown keys are rejected):
 
+To run the seven configured experiments over scales 1, 2, 5, and 10 using three
+timed runs per query, with the flat and partitioned Parquet layouts already
+converted, run:
+
+```bash
+bash scripts/run_experiments.sh
+```
+
+The suite includes an unoptimized baseline, five single-option comparisons
+(core parallelism, shuffle partitions, broadcast threshold, memory allocation,
+and static dimension caching), and a final experiment combining the
+optimizations. The script temporarily updates all relevant Spark options in
+`config/config.toml` for each experiment and restores its original contents
+when it exits. It skips a scale-factor run only when its saved CSV reports
+show that all selected queries completed successfully with the matching
+configuration. By default, it checks reports from `2026-10-26`; set
+`RESUME_DATE=YYYY-MM-DD` when resuming reports saved under another date.
+
 | Option | Description |
 |---|---|
 | `[general] runs_per_query` | Execute each query this many times (default `5`). Timings are reported as min/max/avg over the runs. |
@@ -154,6 +179,11 @@ validated by `pipeline/config_loader.py` (unknown keys are rejected):
 | `[spark] cbo_enabled` | Sets `spark.sql.cbo.enabled`, and runs `ANALYZE TABLE ... COMPUTE STATISTICS FOR ALL COLUMNS` on every table after registering it (default `false`). Requires `register_tables_as = "tables"`. The analysis time counts toward the run's total elapsed time, not toward any query's timings. |
 | `[spark] cbo_join_reorder` | Sets `spark.sql.cbo.joinReorder.enabled`, letting the CBO reorder joins using the collected statistics (default `false`). Requires `cbo_enabled = true`. |
 | `[spark] use_partition`, `use_broadcast_joins_hints` | Flags available to query templates (see below); not Spark settings. |
+| `[spark] shuffle_partitions` | Sets `spark.sql.shuffle.partitions`; `-1` selects twice the detected logical CPU count. |
+| `[spark] use_all_cores` | Uses `local[*]` when true and `local[4]` when false. |
+| `[spark] tune_memory_allocation` | Enables the configured Spark memory and storage fractions. |
+| `[spark] enable_static_caching` | Caches the selected dimension tables before benchmark queries run. |
+| `[spark] use_partition`, `use_broadcast_joins_hints` | `use_partition` selects the Parquet layout; `use_broadcast_joins_hints` is a flag available to query templates (see below). Neither is itself a Spark setting. |
 
 Before running, each query file is rendered as a Jinja template with these
 options as `options`, so a query can adapt to the configuration, e.g.

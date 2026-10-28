@@ -57,11 +57,27 @@ def select_query_files(args: argparse.Namespace, query_dir: str) -> list[str]:
     if not query_dir.is_dir():
         raise FileNotFoundError(f"Query directory not found at {query_dir}")
     query_files = sort_query_files(os.listdir(query_dir))
+    # Single query execution
     if args.query is not None:
         query_file = f"query{args.query}.sql"
         if query_file not in query_files:
             raise FileNotFoundError(f"{query_file} not found in {query_dir}")
         return [query_file]
+    # Execute a list of queries
+    if getattr(args, "query_list", None) is not None:
+        selected_files = []
+        missing_files = []
+        for q in args.query_list:
+            filename = f"query{q}.sql"
+            if filename not in query_files:
+                missing_files.append(filename)
+            else:
+                selected_files.append(filename)
+        if missing_files:
+            raise FileNotFoundError(
+                f"Missing query files in {query_dir}: {missing_files}"
+            )
+        return sort_query_files(selected_files)
 
     def query_number(filename: str) -> int:
         return int(filename.removeprefix("query").removesuffix(".sql"))
