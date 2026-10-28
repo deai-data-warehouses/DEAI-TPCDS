@@ -16,8 +16,6 @@ scenarios
 .ipynb_checkpoints/
 spark-warehouse/
 
-notebooks/
-
 CLAUDE.md
 
 queries/**/.complete

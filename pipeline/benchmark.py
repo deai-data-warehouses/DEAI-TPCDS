@@ -3,15 +3,11 @@ import os
 import time
 import uuid
 
-from contextlib import redirect_stdout
 from datetime import datetime, timezone
-from io import StringIO
 from pathlib import Path
 
-from jinja2 import StrictUndefined, Template
 from py4j.protocol import Py4JError
 from pyspark.errors import PySparkException
-from pyspark.sql import DataFrame
 
 from config_loader import options
 from constants import (
@@ -23,31 +19,15 @@ from constants import (
 )
 from reporting.report import write_reports
 from reporting.summary import build_summary
+from reporting.models import QueryRow
 from spark_session import (
     apply_run_options,
     create_spark_session,
+    get_session_configuration,
     register_tables_in_spark,
 )
-from toolkit.queries import normalize_sql_for_spark, select_query_files
+from toolkit.queries import normalize_sql_for_spark, select_query_files, save_query_plan
 from toolkit.schema import get_table_names, incomplete_parquet_tables
-
-
-def _save_query_plan(
-    dataframe: DataFrame,
-    run_directory: str,
-    query_file: str,
-    statement_part: int,
-) -> Path:
-    """Write a query's extended Spark plan to a text file outside the CSV report."""
-    plan_directory = Path(run_directory) / "query_plans"
-    plan_directory.mkdir(parents=True, exist_ok=True)
-
-    plan_path = plan_directory / f"{Path(query_file).stem}_part{statement_part}.txt"
-    plan_output = StringIO()
-    with redirect_stdout(plan_output):
-        dataframe.explain(mode="extended")
-    plan_path.write_text(plan_output.getvalue(), encoding="utf-8")
-    return plan_path
 
 
 def _print_run_configuration(run_configuration: dict[str, int | bool]) -> None:
@@ -132,7 +112,9 @@ def _query_selection_label(args: argparse.Namespace) -> str:
 
 def main() -> None:
     args = _parse_args()
-    _, parquet_dir, _ = get_scenario_paths(args.scale_factor)
+    _, parquet_dir, _ = get_scenario_paths(
+        args.scale_factor, options.spark.use_partition
+    )
     queries_dir = get_benchmark_queries_dir(args.scale_factor, args.queries)
     query_files = select_query_files(args, queries_dir)
 
@@ -151,136 +133,133 @@ def main() -> None:
     run_id = str(uuid.uuid4())
     run_started_at = datetime.now(timezone.utc)
     started_at = run_started_at.isoformat()
+    query_selection = _query_selection_label(args)
     # Folder name: <HHMMSS>_<scale>GB_<query selection>, e.g. 145347_1GB_full
     run_directory = os.path.join(
         RUNS_DIR,
         run_started_at.strftime("%Y-%m-%d"),
         f"{run_started_at.strftime('%H%M%S')}_{args.scale_factor:g}GB_"
-        f"{_query_selection_label(args)}",
+        f"{query_selection}",
     )
     os.makedirs(run_directory, exist_ok=True)
 
-    # Create session and configurations
-    spark = create_spark_session("TPCDS_Benchmark")
+    spark = create_spark_session(
+        "TPCDS_Benchmark",
+        use_all_cores=options.spark.use_all_cores,
+        tune_memory_allocation=options.spark.tune_memory_allocation
+    )
     spark.sparkContext.setLogLevel("ERROR")
 
     run_configuration = apply_run_options(spark, options)
     _print_run_configuration(run_configuration)
 
-    run_start = time.perf_counter()
-    query_records = []
-
-    print("Registering temporary views from Parquet files...")
-    register_tables_in_spark(spark, parquet_dir)
+    print(f"Registering Parquet files as {options.spark.register_tables_as}...")
+    if options.spark.cbo_enabled:
+        print("Computing table and column statistics for the CBO...")
+    register_tables_in_spark(
+        spark_session=spark,
+        parquet_dir=parquet_dir,
+        register_as=options.spark.register_tables_as,
+        analyze=options.spark.cbo_enabled,
+        enable_static_caching=options.spark.enable_static_caching
+    )
     print("All tables are ready for SQL queries!\n")
 
     print("=================================")
     print("  TPC-DS BENCHMARK START   ")
     print("=================================\n")
 
+    query_records = []
+    runs_per_query = options.general.runs_per_query
     for query_file in query_files:
         query_path = os.path.join(queries_dir, query_file)
-        with open(query_path, "r", encoding="utf-8") as query_stream:
-            sql_template = query_stream.read()
-            rendered_sql = Template(sql_template, undefined=StrictUndefined).render(
-                options=options
-            )
-            # Normalize the SQL for Spark (remove comments, etc.)
-            raw_sql = normalize_sql_for_spark(rendered_sql)
+        with open(query_path, "r", encoding="utf-8") as f:
+            clean_sql = normalize_sql_for_spark(f.read())
 
-        statements = [stmt.strip() for stmt in raw_sql.split(";") if stmt.strip()]
+        statements = [stmt.strip() for stmt in clean_sql.split(";") if stmt.strip()]
         if len(statements) > 1:
             print(
-                f"{query_file} contains {len(statements)} queries, executing all of them"
+                f"{query_file} contains {len(statements)} queries, "
+                "executing all of them"
             )
 
         for i, sql in enumerate(statements, start=1):
-            label = (
-                f"{query_file} (part {i}/{len(statements)})"
-                if len(statements) > 1
-                else query_file
-            )
-            print(f"Executing {label} ({options.general.runs_per_query} runs)...")
-
-            run_times = []
-            status, error, rows = "success", "", None
-            try:
-                plan_path = _save_query_plan(
-                    spark.sql(sql), run_directory, query_file, i
-                )
-                print(f"  Query plan saved to {plan_path}")
-            except (OSError, Py4JError, PySparkException) as e:
-                status, error = "error", str(e)
-                print(f"  - Could not save query plan: {error}")
-
-            for run_iter in range(options.general.runs_per_query):
-                if status == "error":
-                    break
-                start_time = time.perf_counter()
-                try:
-                    rows = spark.sql(sql).count()
-                    elapsed = time.perf_counter() - start_time
-                    run_times.append(elapsed)
-                    print(f"  - Run {run_iter + 1}: ✅ {elapsed:.2f} s (Rows: {rows})")
-                except Exception as e:
-                    elapsed = time.perf_counter() - start_time
-                    print(f"  - Run {run_iter + 1}: ❌ FAILED in {elapsed:.2f} s")
-                    status, error = "error", str(e)
-                    if len(query_files) == 1:
-                        print(f"\n{error}\n")
-                    break
-
-            if status == "success" and run_times:
-                avg_time = sum(run_times) / len(run_times)
-                min_time = min(run_times)
-                max_time = max(run_times)
-            else:
-                min_time, max_time, avg_time = None, None, None
+            label = f"{query_file} (part {i}/{len(statements)})"
+            print(f"Executing {label} ({runs_per_query} runs)...")
 
             query_number = int(query_file.removeprefix("query").removesuffix(".sql"))
+            for run_iter in range(1, runs_per_query + 1):
+                try:
+                    df = spark.sql(sql)
+                    start_time = time.perf_counter()
+                    result = spark.sql(sql).collect()
+                    elapsed = time.perf_counter() - start_time
+                    rows = len(result)
+                    print(f"  - Run {run_iter}: ✅ {elapsed:.2f} s (Rows: {rows})")
+                    status, error, rows = "success", "", rows
 
-            query_records.append(
-                {
-                    "run_id": run_id,
-                    "started_at": started_at,
-                    "query_id": query_number,
-                    "query_file": query_file,
-                    "query_version": args.queries,
-                    "statement_part": i,
-                    "min_seconds": min_time,
-                    "max_seconds": max_time,
-                    "avg_seconds": avg_time,
-                    "status": status,
-                    "row_count": rows,
-                    "error": error[:32767],
-                    "scale_factor": args.scale_factor,
-                    **run_configuration,
-                }
-            )
+                    # We save the plan onfly for the first run of each statement,
+                    # after it has been executed as AQE could have changed it
+                    if run_iter == 1:
+                        try:
+                            plan_path = save_query_plan(df, run_directory, query_file, i)
+                            print(f"  Query plan saved to {plan_path}")
+                        except (OSError, Py4JError, PySparkException) as e:
+                            print(f"  - Could not save query plan: {str(e)}")
 
-            # Force a full JVM garbage collection between statements (outside
-            # the timed section). Otherwise the heap keeps the memory grown by
-            # earlier queries and, over a long run, the host can run out of RAM
-            # and the OOM killer kills the Spark JVM. Together with the heap
-            # free ratios set in create_spark_session, this lets the JVM return
-            # unused memory to the OS.
+                except Exception as e:
+                    elapsed = time.perf_counter() - start_time
+                    print(f"  - Run {run_iter}: ❌ FAILED in {elapsed:.2f} s")
+                    status, error, rows = "error", str(e), None
+
+                query_records.append(
+                    QueryRow(
+                        run_id=run_id,
+                        query_filename=query_file,
+                        query_number=query_number,
+                        query_version=args.queries,
+                        statement_part=i,
+                        run_number=run_iter,
+                        seconds=elapsed,
+                        status=status,
+                        row_count=rows,
+                        error=error[:32767],  # Truncate to fit in CSV column
+                    )
+                )
+
+            # Force a full JVM garbage collection between statements. Otherwise
+            # the heap keeps the memory grown by earlier queries and, over a
+            # long run, the host can run out of RAM and the OOM killer kills the
+            # Spark JVM. Together with the heap free ratios set in
+            # create_spark_session, this lets the JVM return unused memory to
+            # the OS.
             try:
                 spark._jvm.System.gc()
             except Exception:
                 pass
 
-    run_elapsed_seconds = time.perf_counter() - run_start
     summary = build_summary(
-        query_records,
+        query_records=query_records,
         run_id=run_id,
         started_at=started_at,
         scale_factor=args.scale_factor,
+        query_selection=query_selection,
         parquet_dir=parquet_dir,
         queries_dir=queries_dir,
-        run_elapsed_seconds=run_elapsed_seconds,
+        options=options
     )
-    summary.update(run_configuration)
-    write_reports(run_directory, query_records, summary)
+    run_config = [
+        {"section": section, "option": option, "value": value}
+        for section, section_options in options.model_dump().items()
+        for option, value in section_options.items()
+    ]
+    write_reports(
+        run_directory,
+        [r.model_dump() for r in query_records],
+        summary,
+        run_config=run_config,
+        spark_config=get_session_configuration(spark),
+    )
 
     input(f"\n⚠️ Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
     try:
