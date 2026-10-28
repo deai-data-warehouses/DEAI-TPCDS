@@ -2,7 +2,11 @@ import argparse
 import re
 import os
 
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from pyspark.sql import DataFrame
+
 
 def sort_query_files(query_files):
     """
@@ -100,3 +104,27 @@ def select_query_files(args: argparse.Namespace, query_dir: str) -> list[str]:
             f"Missing or empty SQL query files in {query_dir}: {empty_queries}"
         )
     return query_files
+
+
+def save_query_plan(
+    dataframe: DataFrame,
+    run_directory: str,
+    query_file: str,
+    statement_part: int,
+) -> Path:
+    """
+    Write a query's extended Spark plan to a text file outside the CSV report.
+    """
+    plan_directory = Path(run_directory) / "query_plans"
+    plan_directory.mkdir(parents=True, exist_ok=True)
+    plan_filename = f"{Path(query_file).stem}_part{statement_part}.txt"
+    plan_path = plan_directory / plan_filename
+
+    # DataFrame.explain() doesn't return the plan. It prints it to standard
+    # output and returns None. To get the text into a file, we need to capture
+    # what gets printed
+    plan_output = StringIO()
+    with redirect_stdout(plan_output):
+        dataframe.explain(mode="formatted")
+    plan_path.write_text(plan_output.getvalue(), encoding="utf-8")
+    return plan_path

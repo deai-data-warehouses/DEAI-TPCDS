@@ -18,7 +18,7 @@ def create_spark_session(
         .config("spark.driver.memory", "6g")
         .config("spark.driver.extraJavaOptions",
                 "-XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30")
-        .config("spark.sql.ansi.enable", "true")
+        .config("spark.sql.ansi.enabled", "true")
         .config("spark.sql.ansi.doubleQuotedIdentifiers", "true")
     )
     if tune_memory_allocation:
@@ -148,3 +148,50 @@ def apply_run_options(spark_session, options) -> dict[str, int | bool | str]:
     run_configuration["enable_static_caching"] = options.spark.enable_static_caching
 
     return run_configuration
+
+
+def get_session_configuration(spark_session) -> list[dict[str, str | bool]]:
+    """
+    Every configuration parameter of a Spark session, sorted by name, for
+    inclusion in the run reports. Each row holds the parameter, its
+    description, its value in this session, Spark's default value, and whether
+    it was changed: explicitly set (by us in create_spark_session /
+    apply_run_options, or by Spark itself at startup, e.g. spark.app.id) to a
+    value other than the default. Values are compared as text, so 10485760 vs
+    the default 10MB counts as changed.
+
+    The parameter list combines two sources:
+    - SET -v: every documented SQL parameter with its current value, defaults
+      included. The Python API has no equivalent.
+    - spark.conf.getAll: every parameter explicitly set in this session,
+      including core ones (spark.master, spark.driver.memory, ...) and ones
+      Spark does not document, which SET -v leaves out; their values win.
+    Default values and descriptions come from Spark's registry of known
+    parameters (internal JVM API, the only place that exposes defaults). Keys
+    Spark does not know, such as spark.app.id or a misspelled key, have none.
+    """
+    session_values = {
+        row["key"]: row["value"] for row in spark_session.sql("SET -v").collect()
+    }
+    explicitly_set = spark_session.conf.getAll
+    session_values.update(explicitly_set)
+
+    config_entry = spark_session._jvm.org.apache.spark.internal.config.ConfigEntry
+    rows = []
+    for key in sorted(session_values):
+        entry = config_entry.findEntry(key)
+        rows.append(
+            {
+                "parameter": key,
+                "description": entry.doc() if entry is not None else "",
+                "session_value": session_values[key],
+                "default_value": (
+                    entry.defaultValueString() if entry is not None else ""
+                ),
+                "changed": key in explicitly_set and (
+                    entry is None
+                    or session_values[key] != entry.defaultValueString()
+                ),
+            }
+        )
+    return rows
