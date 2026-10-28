@@ -136,7 +136,7 @@ def apply_run_options(spark_session, options) -> dict[str, int | bool | str]:
     # Shuffling parts
     shuffle_parts = options.spark.shuffle_partitions
     if shuffle_parts <= 0:
-        # 2 particions per nucli lògic disponible a la màquina local
+        # 2 partitions per available logical core on the local machine
         cores = os.cpu_count() or 4
         shuffle_parts = cores * 2
 
