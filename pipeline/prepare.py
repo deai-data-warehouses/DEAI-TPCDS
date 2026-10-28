@@ -153,6 +153,9 @@ def main() -> None:
     build_marker = Path(STAGED_TPCDS_DIR) / ".build-complete"
     if args.force or not tools_ready:
         build_marker.unlink(missing_ok=True)
+        # Remove objects copied over from the source toolkit, which may have
+        # been compiled without the patches (e.g. -fcommon) and fail to link
+        subprocess.run(["make", "clean"], cwd=STAGED_TOOLS_DIR, check=True)
         subprocess.run(
             ["make", "-B"] if args.force else ["make"],
             cwd=STAGED_TOOLS_DIR,
