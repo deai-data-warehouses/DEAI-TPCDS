@@ -21,10 +21,15 @@ def results_dataframe(spark: SparkSession, rows: list[Row], schema: StructType) 
     return spark.createDataFrame(rows, schema).toDF(*unique_names).coalesce(1)
 
 
-def _results_path(results_dir: str, query_file: str, statement_part: int | None) -> Path:
+def results_path(results_dir: str, query_file: str, statement_part: int | None) -> Path:
     """query72.parquet, or query14_part2.parquet for files with several statements."""
     suffix = f"_part{statement_part}" if statement_part is not None else ""
     return Path(results_dir) / f"{Path(query_file).stem}{suffix}.parquet"
+
+
+def results_are_saved(results_dir: str, query_file: str, statement_part: int | None) -> bool:
+    """Whether the results were fully written (Spark's _SUCCESS marker)."""
+    return (results_path(results_dir, query_file, statement_part) / "_SUCCESS").is_file()
 
 
 def save_results(
@@ -39,7 +44,7 @@ def save_results(
     Save the collected rows of one statement as Parquet. statement_part is
     only given for query files with several statements.
     """
-    path = _results_path(results_dir, query_file, statement_part)
+    path = results_path(results_dir, query_file, statement_part)
     results_dataframe(spark, rows, schema).write.mode("overwrite").parquet(str(path))
     return path
 
@@ -62,7 +67,7 @@ def compare_results(
       - "order_differs": same rows (duplicates counted), different order.
       - "mismatch": different rows, with samples from each side.
     """
-    path = _results_path(results_dir, query_file, statement_part)
+    path = results_path(results_dir, query_file, statement_part)
     if not path.exists():
         return {"status": "no_baseline"}
     baseline = spark.read.parquet(str(path))
