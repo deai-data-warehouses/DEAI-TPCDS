@@ -110,14 +110,16 @@ def save_query_plan(
     dataframe: DataFrame,
     run_directory: str,
     query_file: str,
-    statement_part: int,
+    statement_part: int | None,
 ) -> Path:
     """
-    Write a query's extended Spark plan to a text file outside the CSV report.
+    Write a query's extended Spark plan to a text file outside the CSV report:
+    query72.txt, or query14_part2.txt for files with several statements.
     """
     plan_directory = Path(run_directory) / "query_plans"
     plan_directory.mkdir(parents=True, exist_ok=True)
-    plan_filename = f"{Path(query_file).stem}_part{statement_part}.txt"
+    suffix = f"_part{statement_part}" if statement_part is not None else ""
+    plan_filename = f"{Path(query_file).stem}{suffix}.txt"
     plan_path = plan_directory / plan_filename
 
     # DataFrame.explain() doesn't return the plan. It prints it to standard

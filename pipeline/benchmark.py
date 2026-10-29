@@ -90,7 +90,10 @@ def _parse_args() -> argparse.Namespace:
     return args
 
 def _query_selection_label(args: argparse.Namespace) -> str:
-    """Describe the query selection arguments, e.g. "full", "query5", "from10_first3"."""
+    """
+    Describe the query selection and version, e.g. "full_original",
+    "query5_changed", "from10_first3_original".
+    """
     parts = []
     if args.query_list is not None:
         # e.g. "queries_14_23_72"
@@ -106,10 +109,7 @@ def _query_selection_label(args: argparse.Namespace) -> str:
     if args.limit is not None:
         parts.append(f"first{args.limit}")
     label = "_".join(parts) or "full"
-    # Original queries keep the plain label; other versions are suffixed
-    if args.queries != "original":
-        label += f"_{args.queries}"
-    return label
+    return f"{label}_{args.queries}"
 
 
 def main() -> None:
@@ -136,7 +136,7 @@ def main() -> None:
     run_started_at = datetime.now(timezone.utc)
     started_at = run_started_at.isoformat()
     query_selection = _query_selection_label(args)
-    # Folder name: <HHMMSS>_<scale>GB_<query selection>, e.g. 145347_1GB_full
+    # Folder name: <HHMMSS>_<scale>GB_<query selection>, e.g. 145347_1GB_full_original
     run_directory = os.path.join(
         RUNS_DIR,
         run_started_at.strftime("%Y-%m-%d"),
@@ -204,7 +204,12 @@ def main() -> None:
                     # after it has been executed as AQE could have changed it
                     if run_iter == 1:
                         try:
-                            plan_path = save_query_plan(df, run_directory, query_file, i)
+                            plan_path = save_query_plan(
+                                df,
+                                run_directory,
+                                query_file,
+                                i if len(statements) > 1 else None,
+                            )
                             print(f"  Query plan saved to {plan_path}")
                         except (OSError, Py4JError, PySparkException) as e:
                             print(f"  - Could not save query plan: {str(e)}")
