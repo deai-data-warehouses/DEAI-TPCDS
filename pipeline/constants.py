@@ -18,6 +18,10 @@ RUNS_DIR = os.path.join(SCENARIOS_DIR, "runs")
 # root
 QUERIES_DIR = str(Path(__file__).resolve().parent.parent / "queries")
 CONFIG_PATH = str(Path(__file__).resolve().parent.parent / "config" / "config.toml")
+# Plain Spark settings, used to record the baseline results
+DEFAULT_SPARK_CONFIG_PATH = str(
+    Path(__file__).resolve().parent.parent / "config" / "default_spark.toml"
+)
 # Subfolders of QUERIES_DIR the benchmark can read from
 QUERY_VERSIONS = ("original", "changed")
 
@@ -29,6 +33,10 @@ def get_scenario_paths(scale_factor, use_partition=False):
         os.path.join(SCENARIOS_DIR, parquet_label),
         os.path.join(SCENARIOS_DIR, f"queries_{label}"),
     )
+
+def get_results_dir(scale_factor):
+    """Baseline query results (original queries, default Spark settings)."""
+    return os.path.join(SCENARIOS_DIR, f"results_{scale_factor:g}GB")
 
 def get_benchmark_queries_dir(scale_factor, version="original"):
     return os.path.join(QUERIES_DIR, version, f"queries_{scale_factor:g}GB")
