@@ -13,7 +13,7 @@ from constants import (
 )
 from spark_session import apply_run_options, create_spark_session, register_tables_in_spark
 from toolkit.queries import normalize_sql_for_spark, select_query_files
-from toolkit.results import save_results
+from toolkit.results import results_are_saved, save_results
 from toolkit.schema import get_table_names, incomplete_parquet_tables
 
 
@@ -38,6 +38,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--start", type=int, help="queries from query<START> onwards (inclusive)")
     parser.add_argument("--end", type=int, help="queries up to query<END> (inclusive)")
     parser.add_argument("--limit", type=int, help="only the first N queries (in query order)")
+    parser.add_argument(
+        "--force", action="store_true", help="overwrite results that are already saved"
+    )
     args = parser.parse_args()
 
     if args.scale_factor <= 0:
@@ -91,6 +94,9 @@ def main() -> None:
             # Only files with several statements get a _part<N> suffix
             statement_part = i if len(statements) > 1 else None
             label = query_file if statement_part is None else f"{query_file} (part {i})"
+            if not args.force and results_are_saved(results_dir, query_file, statement_part):
+                print(f"⏭️ {label}: already saved, skipping (--force to overwrite)")
+                continue
             try:
                 df = spark.sql(sql)
                 path = save_results(
