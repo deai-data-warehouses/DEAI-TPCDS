@@ -29,6 +29,7 @@ COLUMN_WIDTHS = {
     "statement_part": 15,
     "status": 12,
     "row_count": 12,
+    "result_check": 16,
     "error": 60,
     "scale_factor": 14,
     "query_selection": 24,

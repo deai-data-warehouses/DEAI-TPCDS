@@ -15,6 +15,7 @@ from constants import (
     RUNS_DIR,
     SQL_SCHEMA_PATH,
     get_benchmark_queries_dir,
+    get_results_dir,
     get_scenario_paths,
 )
 from reporting.report import write_reports
@@ -27,6 +28,7 @@ from spark_session import (
     register_tables_in_spark,
 )
 from toolkit.queries import normalize_sql_for_spark, select_query_files, save_query_plan
+from toolkit.results import compare_results
 from toolkit.schema import get_table_names, incomplete_parquet_tables
 
 
@@ -192,7 +194,7 @@ def main() -> None:
                 try:
                     df = spark.sql(sql)
                     start_time = time.perf_counter()
-                    result = spark.sql(sql).collect()
+                    result = df.collect()
                     elapsed = time.perf_counter() - start_time
                     rows = len(result)
                     print(f"  - Run {run_iter}: ✅ {elapsed:.2f} s (Rows: {rows})")
@@ -207,10 +209,35 @@ def main() -> None:
                         except (OSError, Py4JError, PySparkException) as e:
                             print(f"  - Could not save query plan: {str(e)}")
 
+                    # Compare the result with the baseline from save_baseline.py,
+                    # outside the timed section
+                    result_check = ""
+                    if run_iter == 1:
+                        try:
+                            comparison = compare_results(
+                                spark,
+                                result,
+                                df.schema,
+                                get_results_dir(args.scale_factor),
+                                query_file,
+                                i if len(statements) > 1 else None,
+                            )
+                            result_check = comparison["status"]
+                            mark = "✅" if result_check == "match" else "⚠️"
+                            print(f"  {mark} Result vs baseline: {result_check}")
+                            if result_check != "match":
+                                for key, value in comparison.items():
+                                    if key != "status":
+                                        print(f"      {key}: {value}")
+                        # A failed comparison must not mark the query run as failed
+                        except Exception as e:
+                            result_check = "error"
+                            print(f"  - Could not compare with baseline: {str(e)}")
+
                 except Exception as e:
                     elapsed = time.perf_counter() - start_time
                     print(f"  - Run {run_iter}: ❌ FAILED in {elapsed:.2f} s")
-                    status, error, rows = "error", str(e), None
+                    status, error, rows, result_check = "error", str(e), None, ""
 
                 query_records.append(
                     QueryRow(
@@ -223,6 +250,7 @@ def main() -> None:
                         seconds=elapsed,
                         status=status,
                         row_count=rows,
+                        result_check=result_check,
                         error=error[:32767],  # Truncate to fit in CSV column
                     )
                 )

@@ -1,3 +1,6 @@
+import csv
+
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from pyspark.sql import DataFrame, Row, SparkSession
@@ -32,6 +35,35 @@ def results_are_saved(results_dir: str, query_file: str, statement_part: int | N
     return (results_path(results_dir, query_file, statement_part) / "_SUCCESS").is_file()
 
 
+def write_results_csv(
+    parquet_path: Path, column_names: Sequence[str], rows: Iterable[Sequence]
+) -> Path:
+    """
+    Readable copy of a saved result, next to its Parquet (query72.csv).
+    Comparisons use the Parquet, not this.
+
+    Strings are always quoted, so trailing spaces stay visible and NULL (bare)
+    can't be mistaken for the text "NULL"; numbers and dates are left bare.
+    """
+    class _Null:
+        """
+        Written as a bare NULL: not a string, so the CSV writer leaves it
+        unquoted.
+        """
+        def __str__(self) -> str:
+            return "NULL"
+    _NULL = _Null()
+
+    csv_path = parquet_path.with_suffix(".csv")
+    with open(csv_path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f, quoting=csv.QUOTE_STRINGS)
+        writer.writerow(column_names)
+        writer.writerows(
+            [_NULL if value is None else value for value in row] for row in rows
+        )
+    return csv_path
+
+
 def save_results(
     spark: SparkSession,
     rows: list[Row],
@@ -41,11 +73,13 @@ def save_results(
     statement_part: int | None = None,
 ) -> Path:
     """
-    Save the collected rows of one statement as Parquet. statement_part is
-    only given for query files with several statements.
+    Save the collected rows of one statement as Parquet, plus a readable CSV
+    copy. statement_part is only given for query files with several statements.
     """
     path = results_path(results_dir, query_file, statement_part)
-    results_dataframe(spark, rows, schema).write.mode("overwrite").parquet(str(path))
+    df = results_dataframe(spark, rows, schema)
+    df.write.mode("overwrite").parquet(str(path))
+    write_results_csv(path, df.columns, rows)
     return path
 
 

@@ -17,4 +17,5 @@ class QueryRow(BaseModel):
     seconds: float | None = Field(default=None, ge=0)  # None if the run failed
     status: Literal["success", "error"]
     row_count: int | None = Field(default=None, ge=0)  # None if the run failed
+    result_check: str = ""  # toolkit/results.compare_results status, first run only
     error: str = ""
