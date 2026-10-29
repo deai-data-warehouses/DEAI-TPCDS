@@ -1,0 +1,19 @@
+[general]
+runs_per_query = 5
+
+# Plain Spark: every value is Spark's own default, so applying this profile
+# changes nothing in the session.
+[spark]
+use_partition = false
+adaptative_enabled = true              # spark.sql.adaptive.enabled
+adaptative_coalesce_partitions = true  # spark.sql.adaptive.coalescePartitions.enabled
+adapatative_skew_join = true           # spark.sql.adaptive.skewJoin.enabled
+broadcast_threshold_mb = 10            # spark.sql.autoBroadcastJoinThreshold
+shuffle_partitions = 200               # spark.sql.shuffle.partitions
+use_all_cores = false                  # true = local[*], false = local[4]
+tune_memory_allocation = false         # Spark's 0.6 / 0.5
+enable_static_caching = false
+use_broadcast_joins_hints = false
+register_tables_as = "views"
+cbo_enabled = false                    # spark.sql.cbo.enabled
+cbo_join_reorder = false               # spark.sql.cbo.joinReorder.enabled
