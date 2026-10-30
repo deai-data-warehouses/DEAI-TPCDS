@@ -68,6 +68,9 @@ def register_tables_in_spark(
                     table_name, path=table_path, source="parquet"
                 )
                 if analyze:
+                    # Table-level statistics
+                    spark_session.sql(f"ANALYZE TABLE {table_name} COMPUTE STATISTICS")
+                    # Column-level statistics
                     spark_session.sql(
                         f"ANALYZE TABLE {table_name} COMPUTE STATISTICS FOR ALL COLUMNS"
                     )
