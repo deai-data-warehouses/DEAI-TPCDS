@@ -108,10 +108,12 @@ def apply_run_options(spark_session, options) -> dict[str, int | bool | str]:
         "register_tables_as": options.spark.register_tables_as,
         "spark_cbo_enabled": options.spark.cbo_enabled,
         "spark_cbo_join_reorder_enabled": options.spark.cbo_join_reorder,
+        "spark_cbo_plan_stats_enabled": options.spark.cbo_plan_stats_enabled,
     }
     boolean_settings = {
         "spark.sql.cbo.enabled": "spark_cbo_enabled",
         "spark.sql.cbo.joinReorder.enabled": "spark_cbo_join_reorder_enabled",
+        "spark.sql.cbo.planStats.enabled": "spark_cbo_plan_stats_enabled",
         "spark.sql.adaptive.enabled": "spark_adaptive_enabled",
         "spark.sql.adaptive.coalescePartitions.enabled": (
             "spark_adaptive_coalesce_partitions_enabled"

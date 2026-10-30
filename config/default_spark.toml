@@ -15,3 +15,4 @@ use_broadcast_joins_hints = false
 register_tables_as = "views"
 cbo_enabled = false
 cbo_join_reorder = false
+cbo_plan_stats_enabled = false

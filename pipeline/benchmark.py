@@ -204,13 +204,14 @@ def main() -> None:
                     # after it has been executed as AQE could have changed it
                     if run_iter == 1:
                         try:
-                            plan_path = save_query_plan(
+                            plan_paths = save_query_plan(
                                 df,
                                 run_directory,
                                 query_file,
                                 i if len(statements) > 1 else None,
                             )
-                            print(f"  Query plan saved to {plan_path}")
+                            for plan_path in plan_paths:
+                                print(f"  Query plan saved to {plan_path}")
                         except (OSError, Py4JError, PySparkException) as e:
                             print(f"  - Could not save query plan: {str(e)}")
 
@@ -294,7 +295,7 @@ def main() -> None:
         spark_config=get_session_configuration(spark),
     )
 
-    input(f"\n⚠️ Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
+    # input(f"\n⚠️ Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
     try:
         spark.sparkContext.cancelAllJobs()
         spark.stop()

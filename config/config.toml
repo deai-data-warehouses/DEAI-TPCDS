@@ -1,17 +1,18 @@
 [general]
-runs_per_query = 3
+runs_per_query = 6
 
 [spark]
 use_partition = false
-adaptative_enabled = false
-adaptative_coalesce_partitions = false
-adapatative_skew_join = false
+adaptative_enabled = true
+adaptative_coalesce_partitions = true
+adapatative_skew_join = true
 broadcast_threshold_mb = 10            # -1 disables auto broadcast, 10 default, 50 or 100 tuning
 shuffle_partitions = 200               # -1 for dynamic calculation
 use_all_cores = false                  # true = local[*], false = local[4]
 tune_memory_allocation = false         # true = fraction 0.8 / storage 0.3, false = default Spark values (0.6 / 0.5)
 enable_static_caching = false          # static caching of dimensions
 use_broadcast_joins_hints = false      # unused
-register_tables_as = "tables"          # "views" (temp views) or "tables" (catalog tables)
-cbo_enabled = true                     # requires register_tables_as = "tables"
-cbo_join_reorder = true                # requires cbo_enabled = true
+register_tables_as = "views"          # "views" (temp views) or "tables" (catalog tables)
+cbo_enabled = false                    # requires register_tables_as = "tables"
+cbo_join_reorder = false                # requires cbo_enabled = true
+cbo_plan_stats_enabled = false           # requires cbo_enabled = true

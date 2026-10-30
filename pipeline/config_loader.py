@@ -23,6 +23,7 @@ class SparkConfig(StrictBaseModel):
     register_tables_as: Literal["views", "tables"] = "views"  # tables allow ANALYZE TABLE
     cbo_enabled: bool = False                                 # runs ANALYZE TABLE on registration
     cbo_join_reorder: bool = False                            # requires cbo_enabled
+    cbo_plan_stats_enabled: bool = False                       # requires cbo_enabled
     shuffle_partitions: PositiveInt | Literal[-1] = Field(default=200)    # Spark default is 200, -1 dynamic calculation
     use_all_cores: bool = True    # if False, use 4 cores for local testing
     tune_memory_allocation: bool = False

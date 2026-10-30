@@ -111,22 +111,28 @@ def save_query_plan(
     run_directory: str,
     query_file: str,
     statement_part: int | None,
-) -> Path:
+) -> list[Path]:
     """
-    Write a query's extended Spark plan to a text file outside the CSV report:
-    query72.txt, or query14_part2.txt for files with several statements.
+    Write a query's Spark plans to text files outside the CSV report: the
+    formatted plan to query72.txt and the plan with the optimizer's size and
+    row estimates to query72_cost.txt, or query14_part2.txt and
+    query14_part2_cost.txt for files with several statements.
     """
     plan_directory = Path(run_directory) / "query_plans"
     plan_directory.mkdir(parents=True, exist_ok=True)
     suffix = f"_part{statement_part}" if statement_part is not None else ""
-    plan_filename = f"{Path(query_file).stem}{suffix}.txt"
-    plan_path = plan_directory / plan_filename
 
-    # DataFrame.explain() doesn't return the plan. It prints it to standard
-    # output and returns None. To get the text into a file, we need to capture
-    # what gets printed
-    plan_output = StringIO()
-    with redirect_stdout(plan_output):
-        dataframe.explain(mode="formatted")
-    plan_path.write_text(plan_output.getvalue(), encoding="utf-8")
-    return plan_path
+    plan_paths = []
+    for mode, mode_suffix in (("formatted", ""), ("cost", "_cost")):
+        plan_filename = f"{Path(query_file).stem}{suffix}{mode_suffix}.txt"
+        plan_path = plan_directory / plan_filename
+
+        # DataFrame.explain() doesn't return the plan. It prints it to standard
+        # output and returns None. To get the text into a file, we need to
+        # capture what gets printed
+        plan_output = StringIO()
+        with redirect_stdout(plan_output):
+            dataframe.explain(mode=mode)
+        plan_path.write_text(plan_output.getvalue(), encoding="utf-8")
+        plan_paths.append(plan_path)
+    return plan_paths
