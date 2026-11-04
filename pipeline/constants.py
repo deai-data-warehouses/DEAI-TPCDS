@@ -25,9 +25,14 @@ DEFAULT_SPARK_CONFIG_PATH = str(
 # Subfolders of QUERIES_DIR the benchmark can read from
 QUERY_VERSIONS = ("original", "changed")
 
-def get_scenario_paths(scale_factor, use_partition=False):
+def get_scenario_paths(scale_factor, use_partition=False, use_repartition=False):
     label = f"{scale_factor:g}GB"
-    parquet_label = f"parquet_partitioned_{label}" if use_partition else f"parquet_{label}"
+    if use_partition and use_repartition:
+        parquet_label = f"parquet_partitioned_repartitioned_{label}"
+    elif use_partition:
+        parquet_label = f"parquet_partitioned_{label}"
+    else:
+        parquet_label = f"parquet_{label}"
     return (
         os.path.join(SCENARIOS_DIR, f"data_{label}"),
         os.path.join(SCENARIOS_DIR, parquet_label),

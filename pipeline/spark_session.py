@@ -101,6 +101,7 @@ def apply_run_options(spark_session, options) -> dict[str, int | bool | str]:
     run_configuration: dict[str, int | bool | str] = {
         "runs_per_query": options.general.runs_per_query,
         "use_partition": options.spark.use_partition,
+        "use_repartition": options.spark.use_repartition,
         "use_broadcast_joins_hints": options.spark.use_broadcast_joins_hints,
         "spark_adaptive_enabled": options.spark.adaptative_enabled,
         "spark_adaptive_coalesce_partitions_enabled": (

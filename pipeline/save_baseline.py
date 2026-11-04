@@ -58,7 +58,9 @@ def main() -> None:
     args = _parse_args()
     # Plain Spark settings, so the baseline doesn't depend on any tuning
     options = load_config(DEFAULT_SPARK_CONFIG_PATH)
-    _, parquet_dir, _ = get_scenario_paths(args.scale_factor, options.spark.use_partition)
+    _, parquet_dir, _ = get_scenario_paths(
+        args.scale_factor, options.spark.use_partition, options.spark.use_repartition
+    )
     queries_dir = get_benchmark_queries_dir(args.scale_factor, "original")
     query_files = select_query_files(args, queries_dir)
     results_dir = get_results_dir(args.scale_factor)
