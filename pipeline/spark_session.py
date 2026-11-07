@@ -67,6 +67,16 @@ def register_tables_in_spark(
                 spark_session.catalog.createTable(
                     table_name, path=table_path, source="parquet"
                 )
+                # A table created over partitioned folders (e.g.
+                # ss_sold_date_sk=2450816/) knows its partition column but not
+                # its partitions, and reads as empty until they are registered
+                # in the catalog. Spark rejects this on unpartitioned tables,
+                # hence the check.
+                if any(
+                    column.isPartition
+                    for column in spark_session.catalog.listColumns(table_name)
+                ):
+                    spark_session.catalog.recoverPartitions(table_name)
                 if analyze:
                     # Table-level statistics
                     spark_session.sql(f"ANALYZE TABLE {table_name} COMPUTE STATISTICS")
