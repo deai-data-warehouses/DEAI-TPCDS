@@ -108,7 +108,10 @@ def compare_results(
     actual = results_dataframe(spark, rows, schema)
 
     def columns(df: DataFrame) -> list[tuple[str, str]]:
-        return [(field.name, field.dataType.simpleString()) for field in df.schema.fields]
+        return [
+            (field.name, field.dataType.simpleString())
+            for field in df.schema.fields
+        ]
 
     if columns(baseline) != columns(actual):
         return {
@@ -122,9 +125,10 @@ def compare_results(
 
     # exceptAll keeps duplicates, so both sides empty means the same multiset
     only_in_baseline = baseline.exceptAll(actual).limit(SAMPLE_SIZE).collect()
-    only_in_actual = actual.exceptAll(baseline).limit(SAMPLE_SIZE).collect()
+    only_in_actual   = actual.exceptAll(baseline).limit(SAMPLE_SIZE).collect()
     if not only_in_baseline and not only_in_actual:
         return {"status": "order_differs"}
+
     return {
         "status": "mismatch",
         "baseline_rows": baseline.count(),
