@@ -8,7 +8,7 @@ def create_spark_session(
     use_all_cores: bool,
     tune_memory_allocation: bool
 ) -> SparkSession:
-    master_val = "local[*]" if use_all_cores else "local[4]"
+    master_val = "local[*]" if use_all_cores else "local[6]"
     builder = (
         SparkSession.builder
         .appName(app_name)
@@ -112,7 +112,6 @@ def apply_run_options(spark_session, options) -> dict[str, int | bool | str]:
         "runs_per_query": options.general.runs_per_query,
         "use_partition": options.spark.use_partition,
         "use_repartition": options.spark.use_repartition,
-        "use_broadcast_joins_hints": options.spark.use_broadcast_joins_hints,
         "spark_adaptive_enabled": options.spark.adaptative_enabled,
         "spark_adaptive_coalesce_partitions_enabled": (
             options.spark.adaptative_coalesce_partitions

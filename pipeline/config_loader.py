@@ -16,7 +16,6 @@ class GeneralConfig(StrictBaseModel):
 class SparkConfig(StrictBaseModel):
     use_partition: bool = False
     use_repartition: bool = False   # requires use_partition: one file per partition value
-    use_broadcast_joins_hints: bool = False
     adaptative_enabled: bool = False
     adaptative_coalesce_partitions: bool = False
     adapatative_skew_join: bool = False
