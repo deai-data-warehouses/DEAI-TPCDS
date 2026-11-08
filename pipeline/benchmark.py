@@ -115,7 +115,7 @@ def _query_selection_label(args: argparse.Namespace) -> str:
 def main() -> None:
     args = _parse_args()
     _, parquet_dir, _ = get_scenario_paths(
-        args.scale_factor, options.spark.use_partition
+        args.scale_factor, options.spark.use_partition, options.spark.use_repartition
     )
     queries_dir = get_benchmark_queries_dir(args.scale_factor, args.queries)
     query_files = select_query_files(args, queries_dir)
@@ -295,7 +295,7 @@ def main() -> None:
         spark_config=get_session_configuration(spark),
     )
 
-    # input(f"\n⚠️ Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
+    input(f"\n⚠️ Spark UI still up at {spark.sparkContext.uiWebUrl} - press Enter to exit...")
     try:
         spark.sparkContext.cancelAllJobs()
         spark.stop()

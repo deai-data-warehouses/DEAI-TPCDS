@@ -8,7 +8,7 @@ def create_spark_session(
     use_all_cores: bool,
     tune_memory_allocation: bool
 ) -> SparkSession:
-    master_val = "local[*]" if use_all_cores else "local[4]"
+    master_val = "local[*]" if use_all_cores else "local[6]"
     builder = (
         SparkSession.builder
         .appName(app_name)
@@ -67,6 +67,16 @@ def register_tables_in_spark(
                 spark_session.catalog.createTable(
                     table_name, path=table_path, source="parquet"
                 )
+                # A table created over partitioned folders (e.g.
+                # ss_sold_date_sk=2450816/) knows its partition column but not
+                # its partitions, and reads as empty until they are registered
+                # in the catalog. Spark rejects this on unpartitioned tables,
+                # hence the check.
+                if any(
+                    column.isPartition
+                    for column in spark_session.catalog.listColumns(table_name)
+                ):
+                    spark_session.catalog.recoverPartitions(table_name)
                 if analyze:
                     # Table-level statistics
                     spark_session.sql(f"ANALYZE TABLE {table_name} COMPUTE STATISTICS")
@@ -101,7 +111,7 @@ def apply_run_options(spark_session, options) -> dict[str, int | bool | str]:
     run_configuration: dict[str, int | bool | str] = {
         "runs_per_query": options.general.runs_per_query,
         "use_partition": options.spark.use_partition,
-        "use_broadcast_joins_hints": options.spark.use_broadcast_joins_hints,
+        "use_repartition": options.spark.use_repartition,
         "spark_adaptive_enabled": options.spark.adaptative_enabled,
         "spark_adaptive_coalesce_partitions_enabled": (
             options.spark.adaptative_coalesce_partitions

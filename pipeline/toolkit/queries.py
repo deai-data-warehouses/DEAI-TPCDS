@@ -123,7 +123,9 @@ def save_query_plan(
     suffix = f"_part{statement_part}" if statement_part is not None else ""
 
     plan_paths = []
-    for mode, mode_suffix in (("formatted", ""), ("cost", "_cost")):
+    for mode, mode_suffix in (
+        ("formatted", ""), ("cost", "_cost"), ("extended", "_extended")
+    ):
         plan_filename = f"{Path(query_file).stem}{suffix}{mode_suffix}.txt"
         plan_path = plan_directory / plan_filename
 

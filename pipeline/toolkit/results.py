@@ -1,4 +1,5 @@
 import csv
+import math
 
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -8,6 +9,24 @@ from pyspark.sql.types import StructType
 
 # Rows from each side kept as examples when results differ
 SAMPLE_SIZE = 5
+
+
+def _values_close(x, y) -> bool:
+    if isinstance(x, float) and isinstance(y, float):
+        if math.isnan(x) or math.isnan(y):
+            return math.isnan(x) and math.isnan(y)
+        # rel_tol: maximum difference for being considered "close", relative to
+        # the magnitude of the input values
+        return math.isclose(x, y, rel_tol=1e-9)
+    return x == y
+
+
+def _rows_close(left: list[tuple], right: list[tuple]) -> bool:
+    """Same rows in the same order, floats within FLOAT_REL_TOL."""
+    return len(left) == len(right) and all(
+        len(a) == len(b) and all(_values_close(x, y) for x, y in zip(a, b))
+        for a, b in zip(left, right)
+    )
 
 
 def results_dataframe(spark: SparkSession, rows: list[Row], schema: StructType) -> DataFrame:
@@ -100,6 +119,11 @@ def compare_results(
       - "match": same rows, in the same order.
       - "order_differs": same rows (duplicates counted), different order.
       - "mismatch": different rows, with samples from each side.
+
+    Floats are compared with a relative tolerance (FLOAT_REL_TOL): aggregates
+    like stddev_samp depend on the order rows are accumulated in, which changes
+    with how the input is split (e.g. partitioned Parquet), so the last bits
+    can differ between runs of the same query. Everything else is exact.
     """
     path = results_path(results_dir, query_file, statement_part)
     if not path.exists():
@@ -108,7 +132,10 @@ def compare_results(
     actual = results_dataframe(spark, rows, schema)
 
     def columns(df: DataFrame) -> list[tuple[str, str]]:
-        return [(field.name, field.dataType.simpleString()) for field in df.schema.fields]
+        return [
+            (field.name, field.dataType.simpleString())
+            for field in df.schema.fields
+        ]
 
     if columns(baseline) != columns(actual):
         return {
@@ -117,14 +144,17 @@ def compare_results(
             "actual_columns": columns(actual),
         }
 
-    if [tuple(row) for row in baseline.collect()] == [tuple(row) for row in rows]:
+    baseline_rows = [tuple(row) for row in baseline.collect()]
+    actual_rows   = [tuple(row) for row in rows]
+    if _rows_close(baseline_rows, actual_rows):
         return {"status": "match"}
 
-    # exceptAll keeps duplicates, so both sides empty means the same multiset
     only_in_baseline = baseline.exceptAll(actual).limit(SAMPLE_SIZE).collect()
-    only_in_actual = actual.exceptAll(baseline).limit(SAMPLE_SIZE).collect()
+    only_in_actual   = actual.exceptAll(baseline).limit(SAMPLE_SIZE).collect()
     if not only_in_baseline and not only_in_actual:
         return {"status": "order_differs"}
+
+    only_in_actual = actual.exceptAll(baseline).limit(SAMPLE_SIZE).collect()
     return {
         "status": "mismatch",
         "baseline_rows": baseline.count(),

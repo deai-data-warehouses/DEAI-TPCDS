@@ -15,13 +15,28 @@ from toolkit.schema import (
 )
 
 
-def write_table_partitioned(dataframe, table_name, output_path):
-    if table_name == "catalog_sales":
-        dataframe.write.mode("overwrite").partitionBy("cs_sold_date_sk").parquet(str(output_path))
-    elif table_name == "inventory":
-        dataframe.write.mode("overwrite").partitionBy("inv_date_sk").parquet(str(output_path))
-    else:
+# Column each fact table is partitioned by on disk (when use_partition = true)
+PARTITION_COLUMNS = {
+    "catalog_sales": "cs_sold_date_sk",
+    "inventory": "inv_date_sk",
+    "store_sales": "ss_sold_date_sk",
+    "web_sales": "ws_sold_date_sk",
+}
+
+
+def write_table_partitioned(dataframe, table_name, output_path, use_repartition=False):
+    partition_column = PARTITION_COLUMNS.get(table_name)
+    if partition_column is None:
         dataframe.write.mode("overwrite").parquet(str(output_path))
+        return
+
+    # Without repartitioning, every write task writes one file into every
+    # partition folder it has rows for, so each folder ends up with roughly one
+    # file per task. Repartitioning by the same column first sends all the rows
+    # of a value to a single task, which leaves one file per folder.
+    if use_repartition:
+        dataframe = dataframe.repartition(partition_column)
+    dataframe.write.mode("overwrite").partitionBy(partition_column).parquet(str(output_path))
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -47,7 +62,7 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     data_dir_str, parquet_dir_str, _ = get_scenario_paths(
-        args.scale_factor, options.spark.use_partition
+        args.scale_factor, options.spark.use_partition, options.spark.use_repartition
     )
     data_dir = Path(data_dir_str)
     parquet_dir = Path(parquet_dir_str)
@@ -126,7 +141,9 @@ def main() -> None:
 
             # Option to use partition
             if options.spark.use_partition:
-                write_table_partitioned(dataframe, table_name, output_path)
+                write_table_partitioned(
+                    dataframe, table_name, output_path, options.spark.use_repartition
+                )
             else:
                 dataframe.write.mode("overwrite").parquet(str(output_path))
 

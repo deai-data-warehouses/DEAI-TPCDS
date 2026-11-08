@@ -15,7 +15,7 @@ class GeneralConfig(StrictBaseModel):
 
 class SparkConfig(StrictBaseModel):
     use_partition: bool = False
-    use_broadcast_joins_hints: bool = False
+    use_repartition: bool = False   # requires use_partition: one file per partition value
     adaptative_enabled: bool = False
     adaptative_coalesce_partitions: bool = False
     adapatative_skew_join: bool = False
@@ -37,6 +37,9 @@ class SparkConfig(StrictBaseModel):
         # Spark ignores join reordering unless the CBO is enabled
         if self.cbo_join_reorder and not self.cbo_enabled:
             raise ValueError("cbo_join_reorder = true requires cbo_enabled = true")
+        # Repartitioning only changes how partitioned tables are written
+        if self.use_repartition and not self.use_partition:
+            raise ValueError("use_repartition = true requires use_partition = true")
         return self
 
 

@@ -96,4 +96,3 @@ with frequent_ss_items as
      order by c_last_name,c_first_name,sales
   limit 100;
 
-
