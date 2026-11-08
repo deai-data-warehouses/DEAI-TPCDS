@@ -8,7 +8,7 @@ def create_spark_session(
     use_all_cores: bool,
     tune_memory_allocation: bool
 ) -> SparkSession:
-    master_val = "local[*]" if use_all_cores else "local[6]"
+    master_val = "local[*]" if use_all_cores else "local[4]"
     builder = (
         SparkSession.builder
         .appName(app_name)
