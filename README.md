@@ -101,20 +101,6 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 Run options that are not command-line flags live in `config/config.toml`,
 validated by `pipeline/config_loader.py` (unknown keys are rejected):
 
-To run the seven configured experiments over scales 1, 2, 5, and 10 using three
-timed runs per query, with the flat and partitioned Parquet layouts already
-converted, run:
-
-```bash
-bash scripts/run_experiments.sh
-```
-
-The suite includes an unoptimized baseline, five single-option comparisons
-(core parallelism, shuffle partitions, broadcast threshold, memory allocation,
-and static dimension caching), and a final experiment combining the
-optimizations. By default, it checks reports from `2026-10-26`; set
-`RESUME_DATE=YYYY-MM-DD` when resuming reports saved under another date.
-
 Benchmarking reads existing Parquet from `SCENARIOS_DIR` and the
 version-controlled queries in `queries/original/queries_<N>GB/` (not the
 `SCENARIOS_DIR/queries_<N>GB/` output of the prepare stage, which stays as the
