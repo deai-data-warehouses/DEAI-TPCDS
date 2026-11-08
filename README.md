@@ -30,6 +30,16 @@ that copy, leaving the supplied TPC-DS source unchanged.
 
 ## TL;DR
 
+Before running anything, set the run options in `config/config.toml` (Parquet
+layout, runs per query, Spark settings, etc.; see [Configuration](#configuration)).
+Both `convert.py` and `benchmark.py` read it; changing `use_partition` or
+`use_repartition` afterwards requires running `convert.py` again.
+
+The first conversion of each scale factor must use `use_partition = false`:
+`save_baseline.py` always reads the non-partitioned layout (`parquet_<N>GB`) and
+fails if it doesn't exist. To benchmark the partitioned layout, set
+`use_partition = true` afterwards and run `convert.py` again.
+
 To run the benchmark once, execute this:
 
 ```powershell
@@ -108,7 +118,7 @@ again.
 
 Convert the raw `.dat` files to Parquet (example for 1GB):
 
-```powershell
+```bash
 docker compose run --rm --service-ports pipeline python pipeline/convert.py --scale-factor 1
 ```
 
@@ -126,7 +136,7 @@ experiment runner requires both layouts for every scale factor before it starts.
 Run the original queries once with plain Spark settings and save their results,
 so the benchmark can check that its results are correct (example for 1GB):
 
-```powershell
+```bash
 docker compose run --rm --service-ports pipeline python pipeline/save_baseline.py --scale-factor 1
 ```
 
@@ -134,7 +144,9 @@ The results are saved as Parquet under `SCENARIOS_DIR/results_<N>GB/`, one
 `queryN.parquet` per query (with a `_part<N>` suffix for files with several
 statements), plus a readable `queryN.csv` copy. The baseline always uses
 `config/default_spark.toml`, not `config/config.toml`, so it doesn't depend on
-any tuning.
+any tuning. This also means it always reads the non-partitioned Parquet
+(`parquet_<N>GB`), so `convert.py` must have been run at least once with
+`use_partition = false` for that scale factor.
 
 On the first run of each query, `benchmark.py` compares its result with this
 baseline and records the outcome in the `result_check` column of the report:
@@ -150,7 +162,7 @@ them. It accepts the same selection flags as the benchmark (`--query`, `--start`
 
 Run all generated queries, or select a subset:
 
-```powershell
+```bash
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --query 5
 docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --scale-factor 1 --limit 20
@@ -168,8 +180,8 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 | `--end N` | Run the queries up to `queryN.sql` (inclusive). |
 | `--queries V` | Which query set to read: `original` (default, `queries/original/queries_<N>GB/`) or `changed` (`queries/changed/queries_<N>GB/`, only the modified queries). Recorded as `query_version` in each row; `changed` runs get a `_changed` suffix in the run folder name. |
 
-Run options that are not command-line flags live in `config/config.toml`,
-validated by `pipeline/config_loader.py` (unknown keys are rejected):
+Run options that are not command-line flags (number of runs per query, Spark
+settings, etc.) live in `config/config.toml`; see [Configuration](#configuration).
 
 Benchmarking reads existing Parquet from `SCENARIOS_DIR` and the
 version-controlled queries in `queries/original/queries_<N>GB/` (not the
@@ -194,13 +206,68 @@ arguments:
 | `--end 20 --limit 3` | `145347_1GB_to20_first3` |
 | `--start 10 --end 20 --limit 3` | `145347_1GB_query10-20_first3` |
 
+## Configuration
+
+Edit `config/config.toml` to change how the benchmark runs. It is read by
+`convert.py` (only `use_partition`, `use_repartition`, `use_all_cores` and
+`tune_memory_allocation`) and by `benchmark.py`, so it also applies when using
+`run_benchmark.sh`. In Docker the `config/` folder
+is bind-mounted, so changes take effect on the next run without rebuilding the
+image. The values used in each run are recorded in the report, next to every
+query.
+
+The file is validated by `pipeline/config_loader.py`: unknown keys and invalid
+combinations are rejected before anything runs.
+
+```toml
+[general]
+runs_per_query = 6
+
+[spark]
+use_partition = false
+use_repartition = false
+adaptative_enabled = true
+adaptative_coalesce_partitions = true
+adapatative_skew_join = true
+broadcast_threshold_mb = 10
+shuffle_partitions = 200
+use_all_cores = false
+tune_memory_allocation = false
+enable_static_caching = false
+register_tables_as = "views"
+cbo_enabled = false
+cbo_join_reorder = false
+cbo_plan_stats_enabled = false
+```
+
+| Option | Description |
+|---|---|
+| `runs_per_query` | How many times each query is run. The run summary uses the median time of each query. |
+| `use_partition` | Read (and, in `convert.py`, write) the partitioned Parquet layout, `parquet_partitioned_<N>GB`. |
+| `use_repartition` | When writing partitioned tables, write one file per partition value. Requires `use_partition = true`. |
+| `adaptative_enabled` | Adaptive Query Execution (`spark.sql.adaptive.enabled`). |
+| `adaptative_coalesce_partitions` | AQE partition coalescing (`spark.sql.adaptive.coalescePartitions.enabled`). |
+| `adapatative_skew_join` | AQE skew join handling (`spark.sql.adaptive.skewJoin.enabled`). |
+| `broadcast_threshold_mb` | Maximum table size in MB for broadcast joins (`spark.sql.autoBroadcastJoinThreshold`). `-1` disables them. |
+| `shuffle_partitions` | Number of shuffle partitions (`spark.sql.shuffle.partitions`). `-1` uses 2 per CPU core. |
+| `use_all_cores` | `true` uses as many threads as CPU cores (`local[*]`); `false` uses 4 (`local[4]`). |
+| `tune_memory_allocation` | Sets `spark.memory.fraction = 0.8` and `spark.memory.storageFraction = 0.3`. |
+| `enable_static_caching` | Caches the small dimension tables (`date_dim`, `warehouse`, `ship_mode`, `store`, `item`) in memory before running the queries. |
+| `register_tables_as` | `"views"` (temporary views) or `"tables"` (catalog tables, needed for the CBO). |
+| `cbo_enabled` | Cost-based optimizer (`spark.sql.cbo.enabled`); computes table and column statistics with `ANALYZE TABLE` first. Requires `register_tables_as = "tables"`. |
+| `cbo_join_reorder` | CBO join reordering (`spark.sql.cbo.joinReorder.enabled`). Requires `cbo_enabled = true`. |
+| `cbo_plan_stats_enabled` | Use plan statistics in the CBO (`spark.sql.cbo.planStats.enabled`). Requires `cbo_enabled = true`. |
+
+`save_baseline.py` ignores this file and always uses `config/default_spark.toml`,
+which holds Spark's own defaults.
+
 ## Run locally
 
 The individual Python stages should also be able to run outside Docker if Python, Java,
 Spark prerequisites, and their dependencies are installed. Set the same
 `TPCDS_TOOL_DIR` and `SCENARIOS_DIR` environment variables.
 
-## Disclousre
+## Disclosure
 
-This `README.md` was originally written by the autors, and as the project
-started growing, it was updated using AI, but constantly revised by the autors.
+This `README.md` was originally written by the authors, and as the project
+started growing, it was updated using AI, but constantly revised by the authors.
