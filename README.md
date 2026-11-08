@@ -31,9 +31,40 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 This will prepare the 1GB TPC-DS data, convert it to Parquet, run all 99 queries,
 and produce a spreasheet with the results.
 
-Another option would also be to run the benchmark locally with ```/run_pipeline.sh```
+Alternatively, `run_benchmark.sh` runs all the stages for a given scale factor
+in one go (see [Run everything with one script](#run-everything-with-one-script)):
+
+```bash
+bash run_benchmark.sh 1
+```
 
 The rest of this README will explain how to run the project for other parameters.
+
+## Run everything with one script
+
+`run_benchmark.sh` takes the scale factor as its first argument and runs, in order:
+
+1. `docker compose build`
+2. `prepare.py` (generate raw data and queries)
+3. `convert.py` (convert `.dat` to Parquet)
+4. `save_baseline.py` (save the reference results that the benchmark's `result_check` column compares against)
+5. `benchmark.py` (run the queries and write the report)
+
+```bash
+bash run_benchmark.sh 1                          # 1GB, all original queries
+bash run_benchmark.sh 1 --queries changed        # extra arguments go to benchmark.py
+bash run_benchmark.sh 5 --start 10 --end 20
+```
+
+- Any argument after the scale factor is passed to `benchmark.py` only (see the
+  [Benchmark](#3-benchmark) parameters table).
+- Each stage skips work that is already complete, so running the script again for
+  the same scale factor is cheap. It never passes `--force`; run the stages by hand
+  for that.
+- The script stops at the first stage that fails.
+- It needs an interactive terminal: at the end `benchmark.py` keeps the Spark UI
+  alive at http://localhost:4040 until you press Enter.
+- Reports are written under `SCENARIOS_DIR/runs/` (see [Benchmark](#3-benchmark)).
 
 ## To run the stages
 
@@ -53,12 +84,13 @@ docker compose run --rm pipeline python pipeline/prepare.py --scale-factor 1
 Raw data generation can take a while and needs disk space appropriate to the
 selected scale factor.
 
-Preparation stage checks for complete existing outputs and skips already completed
-work. Use `--force` to rebuild the tools and regenerate all raw data and query
-files if necessary.
+Preparation stage checks for complete existing outputs and skips already
+completed work. Use `--force` to rebuild the tools and regenerate all raw data
+and query files if necessary.
 
-It is possible to have multiple scales' data coexisting in the project's folder without problems.
-Just change the --scale-factor value and run the prepare stage again.
+It is possible to have multiple scales' data coexisting in the project's folder
+without problems. Just change the --scale-factor value and run the prepare stage
+again.
 
 ### 2. Convert
 
@@ -75,8 +107,7 @@ The `use_partition` setting in `config/config.toml` selects the Parquet output
 layout. Convert each scale factor once with `use_partition = false` and once
 with `use_partition = true`; these are kept separately as
 `scenarios/parquet_<N>GB` and `scenarios/parquet_partitioned_<N>GB`. The
-experiment runner requires both layouts for every scale factor before it
-starts.
+experiment runner requires both layouts for every scale factor before it starts.
 
 ### 3. Benchmark
 
@@ -131,15 +162,3 @@ arguments:
 The individual Python stages should also be able to run outside Docker if Python, Java,
 Spark prerequisites, and their dependencies are installed. Set the same
 `TPCDS_TOOL_DIR` and `SCENARIOS_DIR` environment variables.
-
-## References
-
-- [TPC-DS Benchmark Specification](https://www.tpc.org/tpcds/)
-- [Spark SQL API](https://spark.apache.org/docs/latest/api/sql/)
-- [Mastering Broadcast Joins in PySpark: Optimizing Performance for Large-Scale Data Processing](https://www.sparkcodehub.com/pyspark/performance/broadcast-joins)
-- [https://www.sparkcodehub.com/pyspark/performance/broadcast-joins](https://medium.com/@sksami1997/spark-sql-engine-how-queries-are-optimized-and-executed-62cf5b3d3f84)
-- [Spark Configuration (`spark.driver.memory`, `spark.driver.extraJavaOptions`)](https://spark.apache.org/docs/latest/configuration.html)
-- [Java 21 `System.gc()` API](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/System.html#gc())
-- [Java 21 `java` command options (`-XX:MinHeapFreeRatio`, `-XX:MaxHeapFreeRatio`)](https://docs.oracle.com/en/java/javase/21/docs/specs/man/java.html)
-- [Java 21 Garbage-First (G1) Garbage Collector Tuning](https://docs.oracle.com/en/java/javase/21/gctuning/garbage-first-garbage-collector-tuning.html)
-
