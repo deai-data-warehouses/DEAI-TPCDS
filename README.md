@@ -31,6 +31,8 @@ docker compose run --rm --service-ports pipeline python pipeline/benchmark.py --
 This will prepare the 1GB TPC-DS data, convert it to Parquet, run all 99 queries,
 and produce a spreasheet with the results.
 
+Another option would also be to run the benchmark locally with ```/run_pipeline.sh```
+
 The rest of this README will explain how to run the project for other parameters.
 
 ## To run the stages
